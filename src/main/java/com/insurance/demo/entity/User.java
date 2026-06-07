@@ -1,5 +1,6 @@
 package com.insurance.demo.entity;
 
+
 import com.insurance.demo.enums.Role;
 
 import jakarta.persistence.Column;
@@ -43,3 +44,4 @@ public class User {
 
     private boolean active;
 }
+
