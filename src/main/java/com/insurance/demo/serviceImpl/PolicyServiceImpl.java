@@ -12,6 +12,7 @@ import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.Policy;
 import com.insurance.demo.entity.PolicyPlan;
 import com.insurance.demo.enums.PolicyStatus;
+import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.CustomerRepository;
 import com.insurance.demo.repository.PolicyPlanRepository;
 import com.insurance.demo.repository.PolicyRepository;
@@ -23,36 +24,143 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PolicyServiceImpl implements PolicyService {
 
-	private final PolicyRepository policyRepository;
+    private final PolicyRepository policyRepository;
 
-	private final CustomerRepository customerRepository;
+    private final CustomerRepository customerRepository;
 
-	private final PolicyPlanRepository planRepository;
+    private final PolicyPlanRepository planRepository;
 
-	@Override
-	public PolicyResponse purchasePolicy(PurchasePolicyRequest request) {
+    @Override
+    public PolicyResponse purchasePolicy(
+            PurchasePolicyRequest request) {
 
-		Customer customer = customerRepository.findById(request.getCustomerId()).orElseThrow();
+        Customer customer =
+                customerRepository.findById(
+                        request.getCustomerId())
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Customer not found"));
 
-		PolicyPlan plan = planRepository.findById(request.getPlanId()).orElseThrow();
+        PolicyPlan plan =
+                planRepository.findById(
+                        request.getPlanId())
+                .orElseThrow(() ->
+                new ResourceNotFoundException(
+                    "Policy Not Found"));
 
-		Policy policy = Policy.builder().policyNumber("POL-" + UUID.randomUUID().toString().substring(0, 8))
-				.startDate(LocalDate.now()).endDate(LocalDate.now().plusYears(plan.getDurationInYears()))
-				.status(PolicyStatus.PENDING_PAYMENT).customer(customer).plan(plan).build();
+        // Validation
+        if (plan.getDurationInYears() == null) {
+            throw new RuntimeException(
+                    "Plan duration is missing");
+        }
 
-		policyRepository.save(policy);
+        if (!plan.isActive()) {
+            throw new RuntimeException(
+                    "Policy plan is inactive");
+        }
 
-		return new PolicyResponse(policy.getPolicyId(), policy.getPolicyNumber(), customer.getUser().getFullName(),
-				plan.getPlanName(), policy.getStatus().name());
-	}
+        Policy policy =
+                Policy.builder()
+                .policyNumber(
+                        "POL-" +
+                        UUID.randomUUID()
+                                .toString()
+                                .substring(0, 8)
+                                .toUpperCase())
+                .startDate(LocalDate.now())
+                .endDate(
+                        LocalDate.now()
+                                .plusYears(
+                                        plan.getDurationInYears()))
+                .status(
+                        PolicyStatus.PENDING_PAYMENT)
+                .customer(customer)
+                .plan(plan)
+                .build();
 
-	@Override
-	public List<PolicyResponse> getPoliciesByCustomer(Long customerId) {
+        policyRepository.save(policy);
 
-		return policyRepository.findByCustomerCustomerId(customerId).stream()
-				.map(policy -> new PolicyResponse(policy.getPolicyId(), policy.getPolicyNumber(),
-						policy.getCustomer().getUser().getFullName(), policy.getPlan().getPlanName(),
-						policy.getStatus().name()))
-				.toList();
-	}
+        return new PolicyResponse(
+                policy.getPolicyId(),
+                policy.getPolicyNumber(),
+                customer.getUser().getFullName(),
+                plan.getPlanName(),
+                policy.getStatus().name());
+    }
+
+    @Override
+    public List<PolicyResponse>
+    getPoliciesByCustomer(Long customerId) {
+
+        return policyRepository
+                .findByCustomerCustomerId(customerId)
+                .stream()
+                .map(policy ->
+                        new PolicyResponse(
+                                policy.getPolicyId(),
+                                policy.getPolicyNumber(),
+                                policy.getCustomer()
+                                        .getUser()
+                                        .getFullName(),
+                                policy.getPlan()
+                                        .getPlanName(),
+                                policy.getStatus()
+                                        .name()))
+                .toList();
+    }
+    @Override
+    public PolicyResponse issuePolicy(
+            Long policyId) {
+
+        Policy policy =
+                policyRepository.findById(policyId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Policy Not Found"));
+
+        policy.setStatus(
+                PolicyStatus.ACTIVE);
+
+        policyRepository.save(policy);
+
+        return new PolicyResponse(
+                policy.getPolicyId(),
+                policy.getPolicyNumber(),
+                policy.getCustomer()
+                      .getUser()
+                      .getFullName(),
+                policy.getPlan()
+                      .getPlanName(),
+                policy.getStatus()
+                      .name());
+    }
+    
+    @Override
+    public PolicyResponse cancelPolicy(
+            Long policyId) {
+
+        Policy policy =
+                policyRepository.findById(policyId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Policy Not Found"));
+
+        policy.setStatus(
+                PolicyStatus.CANCELLED);
+
+        policyRepository.save(policy);
+
+        return new PolicyResponse(
+                policy.getPolicyId(),
+                policy.getPolicyNumber(),
+                policy.getCustomer()
+                      .getUser()
+                      .getFullName(),
+                policy.getPlan()
+                      .getPlanName(),
+                policy.getStatus()
+                      .name());
+    }
+    
+    
 }

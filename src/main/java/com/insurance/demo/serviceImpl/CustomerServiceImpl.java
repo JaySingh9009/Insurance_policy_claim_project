@@ -6,6 +6,7 @@ import com.insurance.demo.dto.CustomerRequest;
 import com.insurance.demo.dto.CustomerResponse;
 import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.User;
+import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.CustomerRepository;
 import com.insurance.demo.repository.UserRepository;
 import com.insurance.demo.service.CustomerService;
@@ -63,8 +64,8 @@ public class CustomerServiceImpl
     	        customerRepository
     	        .findByUser_Id(userId)
     	        .orElseThrow(() ->
-    	                new RuntimeException(
-    	                        "Customer Not Found"));
+    	        new ResourceNotFoundException(
+    	            "Customer Not Found"));
 
         return new CustomerResponse(
                 customer.getCustomerId(),

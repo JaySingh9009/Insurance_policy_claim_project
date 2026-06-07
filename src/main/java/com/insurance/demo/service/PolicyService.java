@@ -10,4 +10,10 @@ public interface PolicyService {
 	PolicyResponse purchasePolicy(PurchasePolicyRequest request);
 
 	List<PolicyResponse> getPoliciesByCustomer(Long customerId);
+	
+	PolicyResponse issuePolicy(Long policyId);
+
+	PolicyResponse cancelPolicy(Long policyId);
+	
+
 }
