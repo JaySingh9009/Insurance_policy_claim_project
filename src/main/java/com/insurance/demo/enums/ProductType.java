@@ -1,4 +1,3 @@
-
 package com.insurance.demo.enums;
 
 public enum ProductType {
