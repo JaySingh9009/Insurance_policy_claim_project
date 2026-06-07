@@ -1,6 +1,6 @@
 package com.insurance.demo.entity;
 
-import com.insurance.demo.enums.Role;
+import com.insurance.demo.enums.ProductType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,30 +17,25 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name="users")
+@Table(name = "insurance_products")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
+public class InsuranceProduct {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long productId;
 
-    private String fullName;
+	@Column(unique = true)
+	private String productName;
 
-    @Column(unique = true)
-    private String email;
+	@Enumerated(EnumType.STRING)
+	private ProductType productType;
 
-    private String password;
+	private String description;
 
-    private String mobileNumber;
-
-    @Enumerated(EnumType.STRING)
-    private Role role;
-
-    private boolean active;
+	private boolean active;
 }
-
