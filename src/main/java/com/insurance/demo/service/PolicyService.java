@@ -15,5 +15,9 @@ public interface PolicyService {
 
 	PolicyResponse cancelPolicy(Long policyId);
 	
+	PolicyResponse getPolicyById(Long policyId);
+
+	List<PolicyResponse> getAllPolicies();
+	
 
 }

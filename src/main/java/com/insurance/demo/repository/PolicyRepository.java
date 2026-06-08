@@ -9,4 +9,5 @@ import com.insurance.demo.entity.Policy;
 public interface PolicyRepository extends JpaRepository<Policy, Long> {
 
 	List<Policy> findByCustomerCustomerId(Long customerId);
+	boolean existsByPlan_Product_ProductId(Long productId);
 }

@@ -162,5 +162,48 @@ public class PolicyServiceImpl implements PolicyService {
                       .name());
     }
     
+    @Override
+    public PolicyResponse getPolicyById(
+            Long policyId) {
+
+        Policy policy =
+                policyRepository.findById(policyId)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Policy not found"));
+
+        return new PolicyResponse(
+                policy.getPolicyId(),
+                policy.getPolicyNumber(),
+                policy.getCustomer()
+                        .getUser()
+                        .getFullName(),
+                policy.getPlan()
+                        .getPlanName(),
+                policy.getStatus()
+                        .name());
+    }
+    
+    @Override
+    public List<PolicyResponse>
+    getAllPolicies() {
+
+        return policyRepository.findAll()
+                .stream()
+                .map(policy ->
+                        new PolicyResponse(
+                                policy.getPolicyId(),
+                                policy.getPolicyNumber(),
+                                policy.getCustomer()
+                                        .getUser()
+                                        .getFullName(),
+                                policy.getPlan()
+                                        .getPlanName(),
+                                policy.getStatus()
+                                        .name()))
+                .toList();
+    }
+    
+    
     
 }

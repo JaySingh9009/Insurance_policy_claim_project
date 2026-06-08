@@ -2,11 +2,16 @@ package com.insurance.demo.controller;
 
 import java.util.List;
 
+
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,6 +43,8 @@ public class ProductController {
 		return ResponseEntity.ok(productService.getAllProducts());
 	}
 	
+	
+	
 	@GetMapping("/paged")
 	public ResponseEntity<Page<ProductResponse>>
 	getProducts(
@@ -60,4 +67,40 @@ public class ProductController {
 	                    size,
 	                    sortBy));
 	}
+	
+	@GetMapping("/{id}")
+	public ResponseEntity<ProductResponse> getProductById(
+	        @PathVariable Long id) {
+
+	    return ResponseEntity.ok(
+	            productService.getProductById(id));
+	}
+	
+	
+
+	@PreAuthorize("hasRole('ADMIN')")
+	@PutMapping("/{id}")
+	public ResponseEntity<ProductResponse> updateProduct(
+	        @PathVariable Long id,
+	        @RequestBody ProductRequest request) {
+
+	    return ResponseEntity.ok(
+	            productService.updateProduct(id, request));
+	}
+	
+	
+	
+
+	@PreAuthorize("hasRole('ADMIN')")
+	@PutMapping("/{id}/deactivate")
+	public ResponseEntity<String> deactivateProduct(
+	        @PathVariable Long id){
+
+	    productService.deactivateProduct(id);
+
+	    return ResponseEntity.ok(
+	            "Product deactivated successfully");
+	}
+	
+	
 }
