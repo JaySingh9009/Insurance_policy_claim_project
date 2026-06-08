@@ -47,4 +47,77 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
 						plan.getPremiumAmount(), plan.getDurationInYears(), plan.getProduct().getProductName()))
 				.toList();
 	}
+	@Override
+	public PolicyPlanResponse updatePlan(
+	        Long planId,
+	        PolicyPlanRequest request) {
+
+	    PolicyPlan plan =
+	            planRepository.findById(planId)
+	            .orElseThrow(() ->
+	                    new RuntimeException(
+	                            "Plan not found"));
+
+	    plan.setPlanName(
+	            request.getPlanName());
+
+	    plan.setCoverageAmount(
+	            request.getCoverageAmount());
+
+	    plan.setPremiumAmount(
+	            request.getPremiumAmount());
+
+	    plan.setDurationInYears(
+	            request.getDurationInYears());
+
+	    plan.setTermsAndConditions(
+	            request.getTermsAndConditions());
+
+	    plan.setActive(
+	            request.isActive());
+
+	    planRepository.save(plan);
+
+	    return new PolicyPlanResponse(
+	            plan.getPlanId(),
+	            plan.getPlanName(),
+	            plan.getCoverageAmount(),
+	            plan.getPremiumAmount(),
+	            plan.getDurationInYears(),
+	            plan.getProduct().getProductName());
+	}
+	
+	@Override
+	public PolicyPlanResponse getPlanById(
+	        Long planId) {
+
+	    PolicyPlan plan =
+	            planRepository.findById(planId)
+	            .orElseThrow(() ->
+	                    new RuntimeException(
+	                            "Plan not found"));
+
+	    return new PolicyPlanResponse(
+	            plan.getPlanId(),
+	            plan.getPlanName(),
+	            plan.getCoverageAmount(),
+	            plan.getPremiumAmount(),
+	            plan.getDurationInYears(),
+	            plan.getProduct().getProductName());
+	}
+	
+	@Override
+	public void deactivatePlan(
+	        Long planId) {
+
+	    PolicyPlan plan =
+	            planRepository.findById(planId)
+	            .orElseThrow(() ->
+	                    new RuntimeException(
+	                            "Plan not found"));
+
+	    plan.setActive(false);
+
+	    planRepository.save(plan);
+	}
 }

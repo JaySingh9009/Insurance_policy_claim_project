@@ -17,6 +17,7 @@ import com.insurance.demo.dto.ClaimResponse;
 import com.insurance.demo.dto.ClaimReviewRequest;
 import com.insurance.demo.service.ClaimService;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -24,78 +25,54 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ClaimController {
 
-    private final ClaimService claimService;
-    @PreAuthorize("hasRole('CUSTOMER')")
-    @PostMapping
-    public ResponseEntity<ClaimResponse>
-    submitClaim(
-            @RequestBody ClaimRequest request){
+	private final ClaimService claimService;
 
-        return ResponseEntity.ok(
-                claimService
-                .submitClaim(request));
-    }
+	@PreAuthorize("hasRole('CUSTOMER')")
+	@PostMapping
+	public ResponseEntity<ClaimResponse> submitClaim(@Valid @RequestBody ClaimRequest request) {
 
-    @GetMapping("/{policyId}")
-    public ResponseEntity<List<ClaimResponse>>
-    getClaims(
-            @PathVariable Long policyId){
+		return ResponseEntity.ok(claimService.submitClaim(request));
+	}
 
-        return ResponseEntity.ok(
-                claimService
-                .getClaims(policyId));
-    }
-    @PreAuthorize("hasRole('AGENT')")
-    @PutMapping("/{claimId}/review")
-    public ResponseEntity<ClaimResponse>
-    reviewClaim(
-            @PathVariable Long claimId,
-            @RequestBody ClaimReviewRequest request){
+	@GetMapping("/{policyId}")
+	public ResponseEntity<List<ClaimResponse>> getClaims(@PathVariable Long policyId) {
 
-        return ResponseEntity.ok(
-                claimService.reviewClaim(
-                        claimId,
-                        request));
-    }
-    
-    @PreAuthorize("hasRole('AGENT')")
-    @PutMapping("/{claimId}/recommend-approve")
-    public ResponseEntity<ClaimResponse>
-    recommendApprove(
-            @PathVariable Long claimId){
+		return ResponseEntity.ok(claimService.getClaims(policyId));
+	}
 
-        return ResponseEntity.ok(
-                claimService
-                .recommendApprove(claimId));
-    }
-    @PreAuthorize("hasRole('AGENT')")
-    @PutMapping("/{claimId}/recommend-reject")
-    public ResponseEntity<ClaimResponse>
-    recommendReject(
-            @PathVariable Long claimId){
+	@PreAuthorize("hasRole('AGENT')")
+	@PutMapping("/{claimId}/review")
+	public ResponseEntity<ClaimResponse> reviewClaim(@PathVariable Long claimId,
+			@RequestBody ClaimReviewRequest request) {
 
-        return ResponseEntity.ok(
-                claimService
-                .recommendReject(claimId));
-    }
-    @PreAuthorize("hasRole('ADMIN')")
-    @PutMapping("/{claimId}/approve")
-    public ResponseEntity<ClaimResponse>
-    approveClaim(
-            @PathVariable Long claimId){
+		return ResponseEntity.ok(claimService.reviewClaim(claimId, request));
+	}
 
-        return ResponseEntity.ok(
-                claimService
-                .approveClaim(claimId));
-    }
-    @PreAuthorize("hasRole('ADMIN')")
-    @PutMapping("/{claimId}/reject")
-    public ResponseEntity<ClaimResponse>
-    rejectClaim(
-            @PathVariable Long claimId){
+	@PreAuthorize("hasRole('AGENT')")
+	@PutMapping("/{claimId}/recommend-approve")
+	public ResponseEntity<ClaimResponse> recommendApprove(@PathVariable Long claimId) {
 
-        return ResponseEntity.ok(
-                claimService
-                .rejectClaim(claimId));
-    }
+		return ResponseEntity.ok(claimService.recommendApprove(claimId));
+	}
+
+	@PreAuthorize("hasRole('AGENT')")
+	@PutMapping("/{claimId}/recommend-reject")
+	public ResponseEntity<ClaimResponse> recommendReject(@PathVariable Long claimId) {
+
+		return ResponseEntity.ok(claimService.recommendReject(claimId));
+	}
+
+	@PreAuthorize("hasRole('ADMIN')")
+	@PutMapping("/{claimId}/approve")
+	public ResponseEntity<ClaimResponse> approveClaim(@PathVariable Long claimId) {
+
+		return ResponseEntity.ok(claimService.approveClaim(claimId));
+	}
+
+	@PreAuthorize("hasRole('ADMIN')")
+	@PutMapping("/{claimId}/reject")
+	public ResponseEntity<ClaimResponse> rejectClaim(@PathVariable Long claimId) {
+
+		return ResponseEntity.ok(claimService.rejectClaim(claimId));
+	}
 }

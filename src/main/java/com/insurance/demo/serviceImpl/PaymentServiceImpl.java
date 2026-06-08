@@ -1,6 +1,7 @@
 package com.insurance.demo.serviceImpl;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -28,8 +29,16 @@ public class PaymentServiceImpl implements PaymentService {
 	@Override
 	public PaymentResponse makePayment(PaymentRequest request) {
 
-		Policy policy = policyRepository.findById(request.getPolicyId())
-				.orElseThrow(() -> new RuntimeException("Policy Not Found"));
+		Policy policy = policyRepository
+		        .findById(request.getPolicyId())
+		        .orElseThrow(() ->
+		                new RuntimeException(
+		                        "Policy Not Found"));
+
+		if(policy.getStatus() == PolicyStatus.ACTIVE){
+		    throw new RuntimeException(
+		            "Policy is already active");
+		}
 
 		PremiumPayment payment = PremiumPayment.builder().amount(policy.getPlan().getPremiumAmount())
 				.paymentDate(LocalDateTime.now()).paymentMethod(request.getPaymentMethod())
@@ -44,5 +53,37 @@ public class PaymentServiceImpl implements PaymentService {
 
 		return new PaymentResponse(payment.getPaymentId(), payment.getTransactionId(), payment.getStatus().name(),
 				policy.getPolicyNumber());
+	}
+	
+	@Override
+	public List<PaymentResponse> getPaymentHistory(
+	        Long policyId) {
+
+	    return paymentRepository
+	            .findByPolicyPolicyId(policyId)
+	            .stream()
+	            .map(payment ->
+	                    new PaymentResponse(
+	                            payment.getPaymentId(),
+	                            payment.getTransactionId(),
+	                            payment.getStatus().name(),
+	                            payment.getPolicy()
+	                                    .getPolicyNumber()))
+	            .toList();
+	}
+	@Override
+	public List<PaymentResponse> getAllPayments() {
+
+	    return paymentRepository
+	            .findAll()
+	            .stream()
+	            .map(payment ->
+	                    new PaymentResponse(
+	                            payment.getPaymentId(),
+	                            payment.getTransactionId(),
+	                            payment.getStatus().name(),
+	                            payment.getPolicy()
+	                                    .getPolicyNumber()))
+	            .toList();
 	}
 }

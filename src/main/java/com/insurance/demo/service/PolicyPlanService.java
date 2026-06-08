@@ -10,4 +10,14 @@ public interface PolicyPlanService {
 	PolicyPlanResponse createPlan(PolicyPlanRequest request);
 
 	List<PolicyPlanResponse> getPlansByProduct(Long productId);
+	
+	PolicyPlanResponse updatePlan(
+	        Long planId,
+	        PolicyPlanRequest request);
+
+	PolicyPlanResponse getPlanById(
+	        Long planId);
+
+	void deactivatePlan(
+	        Long planId);
 }

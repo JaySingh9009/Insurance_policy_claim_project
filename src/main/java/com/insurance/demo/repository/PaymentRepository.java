@@ -8,5 +8,5 @@ import com.insurance.demo.entity.PremiumPayment;
 
 public interface PaymentRepository extends JpaRepository<PremiumPayment, Long> {
 
-	List<PremiumPayment> findByPolicyPolicyId(Long policyId);
+	List<PremiumPayment>findByPolicyPolicyId(Long policyId);
 }
