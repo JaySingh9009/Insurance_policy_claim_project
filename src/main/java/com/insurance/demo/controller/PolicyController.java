@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 public class PolicyController {
 
 	private final PolicyService policyService;
+
 	@PreAuthorize("hasRole('CUSTOMER')")
 	@PostMapping
 	public ResponseEntity<PolicyResponse> purchasePolicy(@RequestBody PurchasePolicyRequest request) {
@@ -31,35 +32,38 @@ public class PolicyController {
 		return ResponseEntity.ok(policyService.purchasePolicy(request));
 	}
 
+	@PreAuthorize("hasAnyRole('CUSTOMER','ADMIN','AGENT')")
 	@GetMapping("/customer/{customerId}")
 	public ResponseEntity<List<PolicyResponse>> getPolicies(@PathVariable Long customerId) {
 
 		return ResponseEntity.ok(policyService.getPoliciesByCustomer(customerId));
 	}
-	
-	@PreAuthorize(
-	        "hasAnyRole('ADMIN','AGENT')")
+
+	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
 	@PutMapping("/{policyId}/issue")
-	public ResponseEntity<PolicyResponse>
-	issuePolicy(
-	        @PathVariable
-	        Long policyId){
+	public ResponseEntity<PolicyResponse> issuePolicy(@PathVariable Long policyId) {
 
-	    return ResponseEntity.ok(
-	            policyService
-	            .issuePolicy(policyId));
+		return ResponseEntity.ok(policyService.issuePolicy(policyId));
 	}
-	
-	@PreAuthorize(
-	        "hasAnyRole('ADMIN','AGENT')")
-	@PutMapping("/{policyId}/cancel")
-	public ResponseEntity<PolicyResponse>
-	cancelPolicy(
-	        @PathVariable
-	        Long policyId){
 
-	    return ResponseEntity.ok(
-	            policyService
-	            .cancelPolicy(policyId));
+	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
+	@PutMapping("/{policyId}/cancel")
+	public ResponseEntity<PolicyResponse> cancelPolicy(@PathVariable Long policyId) {
+
+		return ResponseEntity.ok(policyService.cancelPolicy(policyId));
+	}
+
+	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
+	@GetMapping
+	public ResponseEntity<List<PolicyResponse>> getAllPolicies() {
+
+		return ResponseEntity.ok(policyService.getAllPolicies());
+	}
+
+	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
+	@GetMapping("/{policyId}")
+	public ResponseEntity<PolicyResponse> getPolicy(@PathVariable Long policyId) {
+
+		return ResponseEntity.ok(policyService.getPolicyById(policyId));
 	}
 }
