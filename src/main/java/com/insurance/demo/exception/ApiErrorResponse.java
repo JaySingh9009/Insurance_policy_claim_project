@@ -1,8 +1,8 @@
 package com.insurance.demo.exception;
 
-import java.time.LocalDateTime;
-
 import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -12,10 +12,8 @@ import lombok.*;
 public class ApiErrorResponse {
 
     private LocalDateTime timestamp;
-
-    private int status;
-
-    private String error;
-
+    private int statusCode;
+    private String errorType;
     private String message;
+    private String path;
 }

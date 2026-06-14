@@ -1,77 +1,79 @@
 package com.insurance.demo.controller;
 
-import java.util.List;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
+import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PolicyPlanRequest;
 import com.insurance.demo.dto.PolicyPlanResponse;
 import com.insurance.demo.service.PolicyPlanService;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/plans")
 @RequiredArgsConstructor
+@Tag(name = "Policy Plans", description = "Manage policy plans")
 public class PolicyPlanController {
 
-	private final PolicyPlanService planService;
-	@PreAuthorize("hasRole('ADMIN')")
-	@PostMapping
-	public ResponseEntity<PolicyPlanResponse> createPlan(@RequestBody PolicyPlanRequest request) {
+    private final PolicyPlanService planService;
 
-		return ResponseEntity.status(HttpStatus.CREATED).body(planService.createPlan(request));
-	}
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping
+    @Operation(summary = "Create a policy plan (Admin only)")
+    public ResponseEntity<PolicyPlanResponse> createPlan(@Valid @RequestBody PolicyPlanRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(planService.createPlan(request));
+    }
 
-	@GetMapping("/product/{productId}")
-	public ResponseEntity<List<PolicyPlanResponse>> getPlans(@PathVariable Long productId) {
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}")
+    @Operation(summary = "Update a policy plan (Admin only)")
+    public ResponseEntity<PolicyPlanResponse> updatePlan(
+            @PathVariable Long id, @Valid @RequestBody PolicyPlanRequest request) {
+        return ResponseEntity.ok(planService.updatePlan(id, request));
+    }
 
-		return ResponseEntity.ok(planService.getPlansByProduct(productId));
-	}
-	
-	@PreAuthorize("hasRole('ADMIN')")
-	@PutMapping("/{planId}")
-	public ResponseEntity<PolicyPlanResponse>
-	updatePlan(
-	        @PathVariable Long planId,
-	        @RequestBody PolicyPlanRequest request){
+    @GetMapping("/{id}")
+    @Operation(summary = "Get plan by ID")
+    public ResponseEntity<PolicyPlanResponse> getPlanById(@PathVariable Long id) {
+        return ResponseEntity.ok(planService.getPlanById(id));
+    }
 
-	    return ResponseEntity.ok(
-	            planService.updatePlan(
-	                    planId,
-	                    request));
-	}
-	
-	
-	@PreAuthorize("hasRole('ADMIN')")
-	@GetMapping("/{planId}")
-	public ResponseEntity<PolicyPlanResponse>
-	getPlanById(
-	        @PathVariable Long planId){
+    @GetMapping("/active")
+    @Operation(summary = "Get all active plans with pagination")
+    public ResponseEntity<PagedResponse<PolicyPlanResponse>> getActivePlans(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "planName") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        return ResponseEntity.ok(planService.getActivePlans(page, size, sortBy, sortDir));
+    }
 
-	    return ResponseEntity.ok(
-	            planService.getPlanById(planId));
-	}
-	
-	@PreAuthorize("hasRole('ADMIN')")
-	@PatchMapping("/{planId}/deactivate")
-	public ResponseEntity<String>
-	deactivatePlan(
-	        @PathVariable Long planId){
+    @GetMapping("/product/{productId}")
+    @Operation(summary = "Get plans by product ID")
+    public ResponseEntity<PagedResponse<PolicyPlanResponse>> getPlansByProduct(
+            @PathVariable Long productId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(planService.getPlansByProduct(productId, page, size));
+    }
 
-	    planService.deactivatePlan(planId);
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/{id}/deactivate")
+    @Operation(summary = "Deactivate a plan (Admin only)")
+    public ResponseEntity<Void> deactivatePlan(@PathVariable Long id) {
+        planService.deactivatePlan(id);
+        return ResponseEntity.noContent().build();
+    }
 
-	    return ResponseEntity.ok(
-	            "Plan deactivated successfully");
-	}
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/{id}/activate")
+    @Operation(summary = "Activate a plan (Admin only)")
+    public ResponseEntity<Void> activatePlan(@PathVariable Long id) {
+        planService.activatePlan(id);
+        return ResponseEntity.noContent().build();
+    }
 }

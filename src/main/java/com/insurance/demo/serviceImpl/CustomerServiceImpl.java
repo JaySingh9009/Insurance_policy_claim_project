@@ -1,145 +1,138 @@
 package com.insurance.demo.serviceImpl;
 
-import java.util.List;
-
-import org.springframework.stereotype.Service;
-
 import com.insurance.demo.dto.CustomerRequest;
 import com.insurance.demo.dto.CustomerResponse;
+import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.User;
+import com.insurance.demo.exception.BadRequestException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.CustomerRepository;
 import com.insurance.demo.repository.UserRepository;
 import com.insurance.demo.service.CustomerService;
-
+import com.insurance.demo.util.PaginationValidator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-public class CustomerServiceImpl
-        implements CustomerService {
+@Slf4j
+public class CustomerServiceImpl implements CustomerService {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("createdAt", "city", "state");
 
     private final CustomerRepository customerRepository;
-
     private final UserRepository userRepository;
 
     @Override
-    public CustomerResponse createCustomer(
-            CustomerRequest request) {
+    public CustomerResponse createProfile(CustomerRequest request, Long userId) {
+        log.info("Creating customer profile for userId={}", userId);
 
-        User user =
-                userRepository.findById(
-                        request.getUserId())
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "User Not Found"));
+        User user = findUser(userId);
 
-        Customer customer =
-                Customer.builder()
+        // One user → one profile only
+        if (customerRepository.findByUser_Id(userId).isPresent()) {
+            log.warn("Customer profile already exists for userId={}", userId);
+            throw new BadRequestException("Customer profile already exists for this account");
+        }
+
+        Customer customer = Customer.builder()
+                .user(user)
+                .dateOfBirth(request.getDateOfBirth())
                 .address(request.getAddress())
                 .city(request.getCity())
                 .state(request.getState())
                 .pincode(request.getPincode())
-                .nomineeName(
-                        request.getNomineeName())
-                .nomineeRelation(
-                        request.getNomineeRelation())
-                .user(user)
+                .nomineeName(request.getNomineeName())
+                .nomineeRelation(request.getNomineeRelation())
                 .build();
 
-        customerRepository.save(customer);
-
-        return new CustomerResponse(
-                customer.getCustomerId(),
-                user.getFullName(),
-                customer.getCity(),
-                customer.getNomineeName()
-        );
+        customer = customerRepository.save(customer);
+        log.info("Customer profile created: customerId={}", customer.getCustomerId());
+        return mapToResponse(customer);
     }
 
     @Override
-    public CustomerResponse getCustomer(
-            Long userId) {
+    public CustomerResponse updateProfile(CustomerRequest request, Long userId) {
+        log.info("Updating customer profile for userId={}", userId);
 
-    	Customer customer =
-    	        customerRepository
-    	        .findByUser_Id(userId)
-    	        .orElseThrow(() ->
-    	        new ResourceNotFoundException(
-    	            "Customer Not Found"));
+        Customer customer = customerRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for this account"));
 
-        return new CustomerResponse(
-                customer.getCustomerId(),
-                customer.getUser()
-                        .getFullName(),
-                customer.getCity(),
-                customer.getNomineeName()
-        );
-    }
-    
-    @Override
-    public CustomerResponse updateCustomer(
-            Long customerId,
-            CustomerRequest request) {
-
-        Customer customer =
-                customerRepository.findById(customerId)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Customer not found"));
-
+        customer.setDateOfBirth(request.getDateOfBirth());
         customer.setAddress(request.getAddress());
         customer.setCity(request.getCity());
         customer.setState(request.getState());
         customer.setPincode(request.getPincode());
-        customer.setNomineeName(
-                request.getNomineeName());
-        customer.setNomineeRelation(
-                request.getNomineeRelation());
+        customer.setNomineeName(request.getNomineeName());
+        customer.setNomineeRelation(request.getNomineeRelation());
 
-        customerRepository.save(customer);
-
-        return new CustomerResponse(
-                customer.getCustomerId(),
-                customer.getUser().getFullName(),
-                customer.getCity(),
-                customer.getNomineeName());
+        customer = customerRepository.save(customer);
+        log.info("Customer profile updated: customerId={}", customer.getCustomerId());
+        return mapToResponse(customer);
     }
+
     @Override
-    public List<CustomerResponse>
-    getAllCustomers() {
-
-        return customerRepository.findAll()
-                .stream()
-                .map(customer ->
-                        new CustomerResponse(
-                                customer.getCustomerId(),
-                                customer.getUser()
-                                        .getFullName(),
-                                customer.getCity(),
-                                customer.getNomineeName()))
-                .toList();
+    public CustomerResponse getMyProfile(Long userId) {
+        Customer customer = customerRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for this account"));
+        return mapToResponse(customer);
     }
-    
+
     @Override
-    public CustomerResponse getMyProfile(
-            String email) {
+    public PagedResponse<CustomerResponse> getAllCustomers(int page, int size, String sortBy, String sortDir) {
+        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
+        Sort sort = "desc".equalsIgnoreCase(sortDir)
+                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
 
-        User user =
-                userRepository.findByEmail(email)
-                .orElseThrow();
+        Page<Customer> customerPage = customerRepository.findAll(pageable);
+        List<CustomerResponse> records = customerPage.getContent().stream().map(this::mapToResponse).toList();
 
-        Customer customer =
-                customerRepository
-                .findByUser_Id(user.getId())
-                .orElseThrow();
-
-        return new CustomerResponse(
-                customer.getCustomerId(),
-                user.getFullName(),
-                customer.getCity(),
-                customer.getNomineeName());
+        return PagedResponse.<CustomerResponse>builder()
+                .records(records)
+                .currentPage(customerPage.getNumber())
+                .pageSize(customerPage.getSize())
+                .totalRecords(customerPage.getTotalElements())
+                .totalPages(customerPage.getTotalPages())
+                .isLastPage(customerPage.isLast())
+                .build();
     }
-    
+
+    @Override
+    public CustomerResponse getCustomerById(Long customerId) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + customerId));
+        return mapToResponse(customer);
+    }
+
+    private User findUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+    }
+
+    private CustomerResponse mapToResponse(Customer c) {
+        return CustomerResponse.builder()
+                .customerId(c.getCustomerId())
+                .fullName(c.getUser().getFullName())
+                .email(c.getUser().getEmail())
+                .mobileNumber(c.getUser().getMobileNumber())
+                .dateOfBirth(c.getDateOfBirth())
+                .address(c.getAddress())
+                .city(c.getCity())
+                .state(c.getState())
+                .pincode(c.getPincode())
+                .nomineeName(c.getNomineeName())
+                .nomineeRelation(c.getNomineeRelation())
+                .createdAt(c.getCreatedAt())
+                .build();
+    }
 }

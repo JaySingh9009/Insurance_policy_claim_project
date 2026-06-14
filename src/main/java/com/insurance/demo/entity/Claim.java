@@ -1,11 +1,13 @@
 package com.insurance.demo.entity;
 
-import java.time.LocalDateTime;
-
 import com.insurance.demo.enums.ClaimStatus;
-
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "claims")
@@ -20,16 +22,34 @@ public class Claim {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long claimId;
 
-    private String claimReason;
-
-    private Double claimAmount;
-
-    private LocalDateTime claimDate;
-
-    @Enumerated(EnumType.STRING)
-    private ClaimStatus status;
+    @Column(unique = true, nullable = false)
+    private String claimNumber;
 
     @ManyToOne
-    @JoinColumn(name = "policy_id")
+    @JoinColumn(name = "policy_id", nullable = false)
     private Policy policy;
+
+    @Column(nullable = false)
+    private Double claimAmount;
+
+    @Column(nullable = false, length = 1000)
+    private String claimReason;
+
+    @Column(nullable = false)
+    private LocalDate incidentDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ClaimStatus status;
+
+    private String agentRemarks;
+
+    private String adminRemarks;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

@@ -1,24 +1,13 @@
 package com.insurance.demo.entity;
 
-import java.time.LocalDate;
-
 import com.insurance.demo.enums.PolicyStatus;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "policies")
@@ -29,25 +18,39 @@ import lombok.Setter;
 @Builder
 public class Policy {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long policyId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long policyId;
 
-	@Column(unique = true)
-	private String policyNumber;
+    @Column(unique = true, nullable = false)
+    private String policyNumber;
 
-	private LocalDate startDate;
+    @ManyToOne
+    @JoinColumn(name = "customer_id", nullable = false)
+    private Customer customer;
 
-	private LocalDate endDate;
+    @ManyToOne
+    @JoinColumn(name = "plan_id", nullable = false)
+    private PolicyPlan plan;
 
-	@Enumerated(EnumType.STRING)
-	private PolicyStatus status;
+    @Column(nullable = false)
+    private LocalDate startDate;
 
-	@ManyToOne
-	@JoinColumn(name = "customer_id")
-	private Customer customer;
+    @Column(nullable = false)
+    private LocalDate endDate;
 
-	@ManyToOne
-	@JoinColumn(name = "plan_id")
-	private PolicyPlan plan;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PolicyStatus status;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Double totalPremiumPaid = 0.0;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

@@ -1,18 +1,12 @@
 package com.insurance.demo.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.insurance.demo.enums.PremiumType;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "policy_plans")
@@ -23,24 +17,40 @@ import lombok.Setter;
 @Builder
 public class PolicyPlan {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long planId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long planId;
 
-	private String planName;
+    @ManyToOne
+    @JoinColumn(name = "product_id", nullable = false)
+    private InsuranceProduct product;
 
-	private Double coverageAmount;
+    @Column(nullable = false)
+    private String planName;
 
-	private Double premiumAmount;
+    @Column(nullable = false)
+    private Double coverageAmount;
 
-	private Integer durationInYears;
+    @Column(nullable = false)
+    private Double premiumAmount;
 
-	@Column(length = 1000)
-	private String termsAndConditions;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PremiumType premiumType;
 
-	private boolean active;
+    @Column(nullable = false)
+    private Integer durationInYears;
 
-	@ManyToOne
-	@JoinColumn(name = "product_id")
-	private InsuranceProduct product;
+    @Column(length = 2000)
+    private String termsAndConditions;
+
+    @Column(nullable = false)
+    private boolean active;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

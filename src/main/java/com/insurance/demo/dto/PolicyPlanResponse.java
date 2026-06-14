@@ -1,23 +1,24 @@
 package com.insurance.demo.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 public class PolicyPlanResponse {
 
-	private Long planId;
-
-	private String planName;
-
-	private Double coverageAmount;
-
-	private Double premiumAmount;
-
-	private Integer durationInYears;
-
-	private String productName;
+    private Long planId;
+    private String planName;
+    private Double coverageAmount;
+    private Double premiumAmount;
+    private String premiumType;
+    private Integer durationInYears;
+    private String termsAndConditions;
+    private boolean active;
+    private Long productId;
+    private String productName;
+    private LocalDateTime createdAt;
 }

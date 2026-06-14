@@ -1,23 +1,15 @@
 package com.insurance.demo.service;
 
-import java.util.List;
-
+import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PolicyPlanRequest;
 import com.insurance.demo.dto.PolicyPlanResponse;
 
 public interface PolicyPlanService {
-
-	PolicyPlanResponse createPlan(PolicyPlanRequest request);
-
-	List<PolicyPlanResponse> getPlansByProduct(Long productId);
-	
-	PolicyPlanResponse updatePlan(
-	        Long planId,
-	        PolicyPlanRequest request);
-
-	PolicyPlanResponse getPlanById(
-	        Long planId);
-
-	void deactivatePlan(
-	        Long planId);
+    PolicyPlanResponse createPlan(PolicyPlanRequest request);
+    PolicyPlanResponse updatePlan(Long id, PolicyPlanRequest request);
+    PolicyPlanResponse getPlanById(Long id);
+    PagedResponse<PolicyPlanResponse> getActivePlans(int page, int size, String sortBy, String sortDir);
+    PagedResponse<PolicyPlanResponse> getPlansByProduct(Long productId, int page, int size);
+    void deactivatePlan(Long id);
+    void activatePlan(Long id);
 }
