@@ -25,6 +25,10 @@ public class OtpVerification {
     @Column(nullable = false)
     private String emailOtp;
 
+    // NEW: separate OTP for phone/SMS verification
+    @Column(nullable = false)
+    private String phoneOtp;
+
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 

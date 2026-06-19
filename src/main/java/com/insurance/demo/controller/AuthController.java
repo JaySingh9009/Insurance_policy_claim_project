@@ -32,7 +32,8 @@ public class AuthController {
     @PostMapping("/register")
     @Operation(
         summary = "Register a new customer account",
-        description = "Creates an inactive account and sends a 6-digit OTP to the registered email."
+        description = "Creates an inactive account and sends a 6-digit OTP to BOTH the registered email AND mobile number via SMS (Twilio). " +
+                      "The user can choose to verify using either channel."
     )
     public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequest request) {
         String message = authService.register(request);
@@ -42,7 +43,10 @@ public class AuthController {
     @PostMapping("/verify-otp")
     @Operation(
         summary = "Verify OTP to activate account",
-        description = "Validates the OTP sent to the user's email. Activates the account on success."
+        description = "Validates the OTP provided by the user. The 'channel' field must be either 'email' or 'phone'. " +
+                      "If 'email', the OTP sent to the user's email is validated. " +
+                      "If 'phone', the OTP sent via SMS to their mobile number is validated. " +
+                      "Account is activated on success."
     )
     public ResponseEntity<UserResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
         return ResponseEntity.ok(authService.verifyOtp(request));
