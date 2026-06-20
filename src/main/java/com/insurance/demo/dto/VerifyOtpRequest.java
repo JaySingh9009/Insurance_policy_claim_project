@@ -16,12 +16,12 @@ public class VerifyOtpRequest {
     private String otp;
 
     /**
-     * Verification channel chosen by the user.
-     * Accepted values: "email" or "phone"
-     * - "email"  → validates against the email OTP sent to their inbox
-     * - "phone"  → validates against the SMS OTP sent to their mobile number
+     * Must match the channel chosen during registration.
+     * "email" → validates OTP from inbox
+     * "phone" → validates OTP from SMS
      */
     @NotBlank(message = "Channel is required. Use 'email' or 'phone'")
-    @Pattern(regexp = "(?i)email|phone", message = "Channel must be 'email' or 'phone'")
+    @Pattern(regexp = "(?i)email|phone",
+             message = "Channel must be 'email' or 'phone'")
     private String channel;
 }

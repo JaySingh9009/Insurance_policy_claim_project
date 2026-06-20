@@ -1,6 +1,5 @@
 package com.insurance.demo.service;
 
-
 import com.twilio.Twilio;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
@@ -23,23 +22,23 @@ public class SmsService {
     private String fromPhone;
 
     public void sendOtp(String toPhone, String otp) {
-        if (!StringUtils.hasText(accountSid) || !StringUtils.hasText(authToken) || !StringUtils.hasText(fromPhone)) {
-            log.warn("Twilio is not configured. SMS OTP for {} would be: {}", toPhone, otp);
+        if (!StringUtils.hasText(accountSid) || accountSid.startsWith("YOUR_")) {
+            log.warn("[SMS LOG-ONLY MODE] OTP for {} is: {}", toPhone, otp);
             return;
         }
-
         try {
             Twilio.init(accountSid, authToken);
             Message.creator(
                     new PhoneNumber(toPhone),
                     new PhoneNumber(fromPhone),
-                    "Your Insurance Portal OTP is: " + otp + ". Valid for 5 minutes. Do not share with anyone."
+                    "Your Insurance Portal OTP is: " + otp +
+                    ". Valid for 5 minutes. Do not share with anyone."
             ).create();
-            log.info("OTP SMS sent successfully to: {}", toPhone);
+            log.info("SMS OTP sent successfully to: {}", toPhone);
         } catch (Exception ex) {
-            log.error("Failed to send OTP SMS to {}. Error: {}", toPhone, ex.getMessage());
-            throw new IllegalStateException("Unable to send OTP via SMS. Error: " + ex.getMessage(), ex);
+            log.error("Failed to send SMS OTP to {}. Error: {}", toPhone, ex.getMessage());
+            throw new IllegalStateException(
+                    "Unable to send OTP via SMS. Error: " + ex.getMessage(), ex);
         }
     }
 }
-

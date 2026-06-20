@@ -23,4 +23,13 @@ public class RegisterRequest {
     @NotBlank(message = "Mobile number is required")
     @Pattern(regexp = "^\\d{10}$", message = "Mobile number must be exactly 10 digits")
     private String mobileNumber;
+
+    /**
+     * User chooses where to receive their OTP during registration.
+     * Accepted values: "email" or "phone"
+     */
+    @NotBlank(message = "Verification channel is required. Use 'email' or 'phone'")
+    @Pattern(regexp = "(?i)email|phone",
+             message = "verificationChannel must be 'email' or 'phone'")
+    private String verificationChannel;
 }

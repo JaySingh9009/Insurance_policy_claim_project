@@ -24,7 +24,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Public registration, OTP verification and login endpoints")
+@Tag(name = "Authentication", description = "Registration, OTP verification and login")
 public class AuthController {
 
     private final AuthService authService;
@@ -32,10 +32,12 @@ public class AuthController {
     @PostMapping("/register")
     @Operation(
         summary = "Register a new customer account",
-        description = "Creates an inactive account and sends a 6-digit OTP to BOTH the registered email AND mobile number via SMS (Twilio). " +
-                      "The user can choose to verify using either channel."
+        description = "Creates an inactive account. The 'verificationChannel' field decides " +
+                      "where the OTP is sent — 'email' sends to inbox, 'phone' sends via SMS (Twilio). " +
+                      "Only ONE OTP is generated and sent to the chosen channel."
     )
-    public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<Map<String, String>> register(
+            @Valid @RequestBody RegisterRequest request) {
         String message = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", message));
     }
@@ -43,12 +45,11 @@ public class AuthController {
     @PostMapping("/verify-otp")
     @Operation(
         summary = "Verify OTP to activate account",
-        description = "Validates the OTP provided by the user. The 'channel' field must be either 'email' or 'phone'. " +
-                      "If 'email', the OTP sent to the user's email is validated. " +
-                      "If 'phone', the OTP sent via SMS to their mobile number is validated. " +
-                      "Account is activated on success."
+        description = "Submit the OTP received on your chosen channel. " +
+                      "Set 'channel' to 'email' or 'phone' — must match what you chose at registration."
     )
-    public ResponseEntity<UserResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+    public ResponseEntity<UserResponse> verifyOtp(
+            @Valid @RequestBody VerifyOtpRequest request) {
         return ResponseEntity.ok(authService.verifyOtp(request));
     }
 
@@ -57,7 +58,8 @@ public class AuthController {
         summary = "Login and receive JWT token",
         description = "Only verified (active) accounts can log in."
     )
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
 }

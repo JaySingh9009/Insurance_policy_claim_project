@@ -42,45 +42,48 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateEmailException("Email already registered: " + request.getEmail());
         }
 
-        // Save user as INACTIVE — account activates only after OTP verification
         User user = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .mobileNumber(request.getMobileNumber())
                 .role(Role.CUSTOMER)
-                .active(false)   // <-- inactive until OTP verified
+                .active(false)
                 .build();
 
         user = userRepository.save(user);
-        log.info("User saved (inactive), sending OTP via email and SMS: userId={}, email={}", user.getId(), user.getEmail());
 
-        // NEW: sends both an email OTP and a phone/SMS OTP simultaneously
-        otpService.createAndSendOtp(user);
+        // Send OTP only to the channel the user chose
+        String channel = request.getVerificationChannel();
+        otpService.createAndSendOtp(user, channel);
 
-        return "Registration successful. An OTP has been sent to both your email (" + user.getEmail() +
-               ") and your registered mobile number. Please verify using either your email OTP or phone OTP to activate your account.";
+        String destination = "email".equalsIgnoreCase(channel)
+                ? "your email (" + user.getEmail() + ")"
+                : "your mobile number (" + user.getMobileNumber() + ") via SMS";
+
+        return "Registration successful. A 6-digit OTP has been sent to "
+                + destination + ". Please verify to activate your account.";
     }
 
     @Override
     @Transactional
     public UserResponse verifyOtp(VerifyOtpRequest request) {
-        log.info("OTP verification attempt for email: {} via channel: {}", request.getEmail(), request.getChannel());
+        log.info("OTP verification for email={} via channel={}",
+                request.getEmail(), request.getChannel());
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + request.getEmail()));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with email: " + request.getEmail()));
 
         if (user.isActive()) {
             throw new BadRequestException("Account is already verified and active.");
         }
 
-        // NEW: pass channel ("email" or "phone") so OtpService validates the right OTP
         otpService.verifyOtp(user, request.getOtp(), request.getChannel());
 
-        // Activate account
         user.setActive(true);
         userRepository.save(user);
-        log.info("OTP verified successfully via channel={} — account activated: userId={}", request.getChannel(), user.getId());
+        log.info("Account activated: userId={}", user.getId());
 
         return mapToUserResponse(user);
     }
@@ -96,9 +99,9 @@ public class AuthServiceImpl implements AuthService {
                 });
 
         if (!user.isActive()) {
-            log.warn("Login attempt by inactive/unverified user: {}", request.getEmail());
+            log.warn("Login attempt by unverified user: {}", request.getEmail());
             throw new InactiveUserException(
-                    "Your account is not yet verified. Please check your email or SMS for the OTP and verify your account.");
+                    "Your account is not yet verified. Please verify your OTP first.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
