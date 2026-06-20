@@ -1,17 +1,28 @@
 package com.insurance.demo.service;
 
-import java.util.List;
-
 import com.insurance.demo.dto.CustomerRequest;
 import com.insurance.demo.dto.CustomerResponse;
+import com.insurance.demo.dto.PagedResponse;
 
 public interface CustomerService {
 
-	CustomerResponse createProfile(String email, CustomerRequest request);
+    CustomerResponse createProfile(
+            CustomerRequest request,
+            Long userId);
 
-	CustomerResponse getCustomerProfile(String email);
+    CustomerResponse updateProfile(
+            CustomerRequest request,
+            Long userId);
 
-	List<CustomerResponse> getAllCustomers();
+    CustomerResponse getMyProfile(
+            Long userId);
 
-	CustomerResponse updateProfile(String email, CustomerRequest request);
+    PagedResponse<CustomerResponse> getAllCustomers(
+            int page,
+            int size,
+            String sortBy,
+            String sortDir);
+
+    CustomerResponse getCustomerById(
+            Long customerId);
 }

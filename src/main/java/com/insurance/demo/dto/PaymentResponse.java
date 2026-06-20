@@ -1,19 +1,21 @@
 package com.insurance.demo.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 public class PaymentResponse {
 
-	private Long paymentId;
-
-	private String transactionId;
-
-	private String status;
-
-	private String policyNumber;
+    private Long paymentId;
+    private Long policyId;
+    private String policyNumber;
+    private Double amount;
+    private String paymentMode;
+    private String transactionReference;
+    private String paymentStatus;
+    private LocalDateTime paymentDate;
 }

@@ -1,24 +1,21 @@
 package com.insurance.demo.service;
 
-import java.util.List;
-
+import com.insurance.demo.dto.IssuePolicyRequest;
+import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PolicyResponse;
 import com.insurance.demo.dto.PurchasePolicyRequest;
 
 public interface PolicyService {
 
-	PolicyResponse purchasePolicy(PurchasePolicyRequest request);
+	PolicyResponse purchasePolicy(PurchasePolicyRequest request, Long userId);
 
-	List<PolicyResponse> getPoliciesByCustomer(Long customerId);
+	PolicyResponse issuePolicy(IssuePolicyRequest request);
 
-	PolicyResponse issuePolicy(Long policyId);
-
-	PolicyResponse cancelPolicy(Long policyId);
+	PolicyResponse cancelPolicy(Long policyId, Long requestingUserId, String role);
 
 	PolicyResponse getPolicyById(Long policyId);
 
-	List<PolicyResponse> getAllPolicies();
+	PagedResponse<PolicyResponse> getAllPolicies(int page, int size, String sortBy, String sortDir);
 
-	List<PolicyResponse> getMyPolicies(String email);
-
+	PagedResponse<PolicyResponse> getMyPolicies(Long userId, int page, int size, String sortBy, String sortDir);
 }

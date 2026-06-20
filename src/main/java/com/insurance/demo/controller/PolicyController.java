@@ -1,81 +1,109 @@
 package com.insurance.demo.controller;
 
-import java.util.List;
-import org.springframework.security.core.Authentication;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
+import com.insurance.demo.dto.IssuePolicyRequest;
+import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PolicyResponse;
 import com.insurance.demo.dto.PurchasePolicyRequest;
+import com.insurance.demo.security.CustomUserDetails;
 import com.insurance.demo.service.PolicyService;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/policies")
 @RequiredArgsConstructor
+@Tag(name = "Policies", description = "Policy purchase, issuance, and management")
 public class PolicyController {
 
-	private final PolicyService policyService;
+    private final PolicyService policyService;
 
-	@PreAuthorize("hasRole('CUSTOMER')")
-	@PostMapping
-	public ResponseEntity<PolicyResponse> purchasePolicy(@RequestBody PurchasePolicyRequest request) {
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @PostMapping("/purchase")
+    @Operation(summary = "Customer purchases a policy (Customer only)")
+    public ResponseEntity<PolicyResponse> purchasePolicy(
+            @Valid @RequestBody PurchasePolicyRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
 
-		return ResponseEntity.ok(policyService.purchasePolicy(request));
-	}
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(policyService.purchasePolicy(
+                        request,
+                        principal.getUser().getId()));
+    }
 
-	@PreAuthorize("hasAnyRole('CUSTOMER','ADMIN','AGENT')")
-	@GetMapping("/customer/{customerId}")
-	public ResponseEntity<List<PolicyResponse>> getPolicies(@PathVariable Long customerId) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PostMapping("/issue")
+    @Operation(summary = "Admin/Agent issues policy to a specific customer")
+    public ResponseEntity<PolicyResponse> issuePolicy(
+            @Valid @RequestBody IssuePolicyRequest request) {
 
-		return ResponseEntity.ok(policyService.getPoliciesByCustomer(customerId));
-	}
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(policyService.issuePolicy(request));
+    }
 
-	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
-	@PutMapping("/{policyId}/issue")
-	public ResponseEntity<PolicyResponse> issuePolicy(@PathVariable Long policyId) {
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @GetMapping("/my")
+    @Operation(summary = "Get my policies (Customer only)")
+    public ResponseEntity<PagedResponse<PolicyResponse>> getMyPolicies(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
 
-		return ResponseEntity.ok(policyService.issuePolicy(policyId));
-	}
+        return ResponseEntity.ok(
+                policyService.getMyPolicies(
+                        principal.getUser().getId(),
+                        page,
+                        size,
+                        sortBy,
+                        sortDir));
+    }
 
-	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
-	@PutMapping("/{policyId}/cancel")
-	public ResponseEntity<PolicyResponse> cancelPolicy(@PathVariable Long policyId) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @GetMapping
+    @Operation(summary = "Get all policies (Admin/Agent)")
+    public ResponseEntity<PagedResponse<PolicyResponse>> getAllPolicies(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
 
-		return ResponseEntity.ok(policyService.cancelPolicy(policyId));
-	}
+        return ResponseEntity.ok(
+                policyService.getAllPolicies(
+                        page,
+                        size,
+                        sortBy,
+                        sortDir));
+    }
 
-	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
-	@GetMapping
-	public ResponseEntity<List<PolicyResponse>> getAllPolicies() {
+    @GetMapping("/{id}")
+    @Operation(summary = "Get policy by ID")
+    public ResponseEntity<PolicyResponse> getPolicyById(
+            @PathVariable Long id) {
 
-		return ResponseEntity.ok(policyService.getAllPolicies());
-	}
+        return ResponseEntity.ok(
+                policyService.getPolicyById(id));
+    }
 
-	@PreAuthorize("hasAnyRole('ADMIN','AGENT')")
-	@GetMapping("/{policyId}")
-	public ResponseEntity<PolicyResponse> getPolicy(@PathVariable Long policyId) {
+    @PatchMapping("/{id}/cancel")
+    @Operation(summary = "Cancel a policy (Customer for own, Admin/Agent for any)")
+    public ResponseEntity<PolicyResponse> cancelPolicy(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails principal) {
 
-		return ResponseEntity.ok(policyService.getPolicyById(policyId));
-	}
-	
-	@GetMapping("/my-policies")
-	@PreAuthorize("hasRole('CUSTOMER')")
-	public ResponseEntity<List<PolicyResponse>>
-	getMyPolicies(
-	        Authentication authentication) {
+        String role = principal.getUser().getRole().name();
 
-	    return ResponseEntity.ok(
-	            policyService.getMyPolicies(
-	                    authentication.getName()));
-	}
+        return ResponseEntity.ok(
+                policyService.cancelPolicy(
+                        id,
+                        principal.getUser().getId(),
+                        role));
+    }
 }

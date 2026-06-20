@@ -1,101 +1,118 @@
 package com.insurance.demo.controller;
 
-import java.util.List;
-
+import com.insurance.demo.dto.*;
+import com.insurance.demo.security.CustomUserDetails;
+import com.insurance.demo.service.ClaimService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.insurance.demo.dto.ClaimRequest;
-import com.insurance.demo.dto.ClaimResponse;
-import com.insurance.demo.dto.ClaimReviewRequest;
-import com.insurance.demo.service.ClaimService;
-
-import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/claims")
 @RequiredArgsConstructor
+@Tag(name = "Claims", description = "Claim submission and lifecycle management")
 public class ClaimController {
 
     private final ClaimService claimService;
+
+    // ─── Customer: Submit Claim ───────────────────────────────────────────────
+
     @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping
-    public ResponseEntity<ClaimResponse>
-    submitClaim(
-            @RequestBody ClaimRequest request){
-
-        return ResponseEntity.ok(
-                claimService
-                .submitClaim(request));
+    @Operation(summary = "Submit a new claim (Customer only)")
+    public ResponseEntity<ClaimResponse> submitClaim(
+            @Valid @RequestBody ClaimRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(claimService.submitClaim(request, principal.getUser().getId()));
     }
 
-    @GetMapping("/{policyId}")
-    public ResponseEntity<List<ClaimResponse>>
-    getClaims(
-            @PathVariable Long policyId){
+    // ─── Customer: My Claims ──────────────────────────────────────────────────
 
-        return ResponseEntity.ok(
-                claimService
-                .getClaims(policyId));
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @GetMapping("/my")
+    @Operation(summary = "Get my claims (Customer only)")
+    public ResponseEntity<PagedResponse<ClaimResponse>> getMyClaims(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        return ResponseEntity.ok(claimService.getMyClaims(
+                principal.getUser().getId(), page, size, sortBy, sortDir));
     }
+
+    // ─── Agent: Review / Recommend ────────────────────────────────────────────
+
     @PreAuthorize("hasRole('AGENT')")
-    @PutMapping("/{claimId}/review")
-    public ResponseEntity<ClaimResponse>
-    reviewClaim(
-            @PathVariable Long claimId,
-            @RequestBody ClaimReviewRequest request){
-
-        return ResponseEntity.ok(
-                claimService.reviewClaim(
-                        claimId,
-                        request));
+    @PatchMapping("/{id}/review")
+    @Operation(summary = "Agent moves claim to UNDER_REVIEW")
+    public ResponseEntity<ClaimResponse> reviewClaim(
+            @PathVariable Long id,
+            @Valid @RequestBody AgentRemarkRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        // Force targetStatus to UNDER_REVIEW for this endpoint
+        request.setTargetStatus("UNDER_REVIEW");
+        return ResponseEntity.ok(claimService.updateClaimStatus(id, request, principal.getUser().getId()));
     }
-    
+
     @PreAuthorize("hasRole('AGENT')")
-    @PutMapping("/{claimId}/recommend-approve")
-    public ResponseEntity<ClaimResponse>
-    recommendApprove(
-            @PathVariable Long claimId){
-
-        return ResponseEntity.ok(
-                claimService
-                .recommendApprove(claimId));
+    @PatchMapping("/{id}/recommend")
+    @Operation(summary = "Agent recommends APPROVAL or REJECTION")
+    public ResponseEntity<ClaimResponse> recommendClaim(
+            @PathVariable Long id,
+            @Valid @RequestBody AgentRemarkRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        return ResponseEntity.ok(claimService.updateClaimStatus(id, request, principal.getUser().getId()));
     }
-    @PreAuthorize("hasRole('AGENT')")
-    @PutMapping("/{claimId}/recommend-reject")
-    public ResponseEntity<ClaimResponse>
-    recommendReject(
-            @PathVariable Long claimId){
 
-        return ResponseEntity.ok(
-                claimService
-                .recommendReject(claimId));
-    }
+    // ─── Admin: Final Decision ────────────────────────────────────────────────
+
     @PreAuthorize("hasRole('ADMIN')")
-    @PutMapping("/{claimId}/approve")
-    public ResponseEntity<ClaimResponse>
-    approveClaim(
-            @PathVariable Long claimId){
-
-        return ResponseEntity.ok(
-                claimService
-                .approveClaim(claimId));
+    @PatchMapping("/{id}/decision")
+    @Operation(summary = "Admin makes final APPROVED or REJECTED decision")
+    public ResponseEntity<ClaimResponse> makeDecision(
+            @PathVariable Long id,
+            @Valid @RequestBody ClaimDecisionRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        return ResponseEntity.ok(claimService.makeClaimDecision(id, request, principal.getUser().getId()));
     }
-    @PreAuthorize("hasRole('ADMIN')")
-    @PutMapping("/{claimId}/reject")
-    public ResponseEntity<ClaimResponse>
-    rejectClaim(
-            @PathVariable Long claimId){
 
-        return ResponseEntity.ok(
-                claimService
-                .rejectClaim(claimId));
+    // ─── Admin/Agent: All Claims ──────────────────────────────────────────────
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @GetMapping
+    @Operation(summary = "Get all claims (Admin/Agent)")
+    public ResponseEntity<PagedResponse<ClaimResponse>> getAllClaims(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        return ResponseEntity.ok(claimService.getAllClaims(page, size, sortBy, sortDir));
+    }
+
+    // ─── Get Claim by ID ──────────────────────────────────────────────────────
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get claim by ID")
+    public ResponseEntity<ClaimResponse> getClaimById(@PathVariable Long id) {
+        return ResponseEntity.ok(claimService.getClaimById(id));
+    }
+
+    // ─── Claim History ────────────────────────────────────────────────────────
+
+    @GetMapping("/{id}/history")
+    @Operation(summary = "Get claim status history (Admin/Agent/Customer for own claim)")
+    public ResponseEntity<PagedResponse<ClaimHistoryResponse>> getClaimHistory(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(claimService.getClaimHistory(id, page, size));
     }
 }

@@ -1,13 +1,15 @@
 package com.insurance.demo.repository;
 
-import java.util.Optional;
-
+import com.insurance.demo.entity.Customer;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.insurance.demo.entity.Customer;
+import java.util.Optional;
 
-public interface CustomerRepository
-        extends JpaRepository<Customer, Long>{
+public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
-    Optional<Customer> findByUser_Id(Long id);
+    Optional<Customer> findByUser_Id(Long userId);
+
+    Page<Customer> findAll(Pageable pageable);
 }

@@ -1,5 +1,6 @@
 package com.insurance.demo.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
@@ -13,22 +14,22 @@ import lombok.NoArgsConstructor;
 @Builder
 public class CustomerResponse {
 
-	private Long customerId;
+    private Long customerId;
 
-	private String customerName;
+    private String fullName;
+    private String email;
+    private String mobileNumber;
 
-	private String address;
+    private LocalDate dateOfBirth;
 
-	private String city;
+    private String address;
+    private String city;
+    private String state;
+    private String pincode;
 
-	private String state;
+    private String nomineeName;
+    private String nomineeRelation;
 
-	private String pincode;
-
-	private String nomineeName;
-
-	private String nomineeRelation;
-
-	private LocalDateTime createdAt;
-	private LocalDateTime updatedAt;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

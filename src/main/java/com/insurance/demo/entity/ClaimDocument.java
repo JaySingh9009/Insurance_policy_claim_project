@@ -2,6 +2,9 @@ package com.insurance.demo.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "claim_documents")
@@ -16,13 +19,25 @@ public class ClaimDocument {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long documentId;
 
+    @ManyToOne
+    @JoinColumn(name = "claim_id", nullable = false)
+    private Claim claim;
+
+    @Column(nullable = false)
     private String documentName;
 
+    /** e.g. PDF, IMAGE, MEDICAL_REPORT */
+    @Column(nullable = false)
     private String documentType;
 
-    private String documentReference;
+    /** Cloudinary HTTPS URL — publicly accessible */
+    @Column(nullable = false, length = 1000)
+    private String documentUrl;
 
-    @ManyToOne
-    @JoinColumn(name = "claim_id")
-    private Claim claim;
+    /** Cloudinary public_id — used for deletion */
+    @Column(nullable = false)
+    private String publicId;
+
+    @CreationTimestamp
+    private LocalDateTime uploadedAt;
 }

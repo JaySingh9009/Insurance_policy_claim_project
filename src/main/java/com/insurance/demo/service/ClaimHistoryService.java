@@ -1,11 +1,9 @@
 package com.insurance.demo.service;
 
-import java.util.List;
-
 import com.insurance.demo.dto.ClaimHistoryResponse;
 
-public interface ClaimHistoryService {
+import java.util.List;
 
-    List<ClaimHistoryResponse>
-    getClaimHistory(Long claimId);
+public interface ClaimHistoryService {
+    List<ClaimHistoryResponse> getClaimHistory(Long claimId);
 }

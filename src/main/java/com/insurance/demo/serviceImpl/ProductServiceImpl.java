@@ -1,102 +1,151 @@
 package com.insurance.demo.serviceImpl;
 
-import java.util.List;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-
+import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.ProductRequest;
 import com.insurance.demo.dto.ProductResponse;
 import com.insurance.demo.entity.InsuranceProduct;
+import com.insurance.demo.enums.ProductType;
+import com.insurance.demo.exception.BadRequestException;
+import com.insurance.demo.exception.DuplicateResourceException;
 import com.insurance.demo.exception.ResourceNotFoundException;
-import com.insurance.demo.repository.PolicyRepository;
 import com.insurance.demo.repository.ProductRepository;
 import com.insurance.demo.service.ProductService;
-
+import com.insurance.demo.util.PaginationValidator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProductServiceImpl implements ProductService {
 
-	private final ProductRepository productRepository;
-	private final PolicyRepository policyRepository;
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("productName", "productType", "createdAt");
 
-	@Override
-	public ProductResponse createProduct(ProductRequest request) {
+    private final ProductRepository productRepository;
 
-		if (productRepository.existsByProductName(request.getProductName())) {
+    @Override
+    public ProductResponse createProduct(ProductRequest request) {
+        log.info("Creating insurance product: {}", request.getProductName());
 
-			throw new ResourceNotFoundException("Product already exists");
-		}
+        if (productRepository.existsByProductName(request.getProductName())) {
+            log.warn("Product name already exists: {}", request.getProductName());
+            throw new DuplicateResourceException("Product name already exists: " + request.getProductName());
+        }
 
-		InsuranceProduct product = InsuranceProduct.builder().productName(request.getProductName())
-				.productType(request.getProductType()).description(request.getDescription()).active(request.isActive())
-				.build();
+        ProductType type = parseProductType(request.getProductType());
 
-		productRepository.save(product);
+        InsuranceProduct product = InsuranceProduct.builder()
+                .productName(request.getProductName())
+                .productType(type)
+                .description(request.getDescription())
+                .active(true)
+                .build();
 
-		return new ProductResponse(product.getProductId(), product.getProductName(), product.getProductType().name(),
-				product.getDescription(), product.isActive());
-	}
+        product = productRepository.save(product);
+        log.info("Product created: productId={}", product.getProductId());
+        return mapToResponse(product);
+    }
 
-	@Override
-	public List<ProductResponse> getAllProducts() {
+    @Override
+    public ProductResponse updateProduct(Long id, ProductRequest request) {
+        log.info("Updating product: id={}", id);
 
-		return productRepository.findAll().stream()
-				.map(product -> new ProductResponse(product.getProductId(), product.getProductName(),
-						product.getProductType().name(), product.getDescription(), product.isActive()))
-				.toList();
-	}
+        InsuranceProduct product = findProduct(id);
 
-	@Override
-	public Page<ProductResponse> getProducts(int page, int size, String sortBy) {
+        // Check name uniqueness excluding current record
+        if (productRepository.existsByProductNameAndProductIdNot(request.getProductName(), id)) {
+            throw new DuplicateResourceException("Product name already exists: " + request.getProductName());
+        }
 
-		return productRepository.findAll(PageRequest.of(page, size, Sort.by(sortBy)))
-				.map(product -> new ProductResponse(product.getProductId(), product.getProductName(),
-						product.getProductType().name(), product.getDescription(), product.isActive()));
-	}
+        ProductType type = parseProductType(request.getProductType());
 
-	@Override
-	public ProductResponse getProductById(Long id) {
+        product.setProductName(request.getProductName());
+        product.setProductType(type);
+        product.setDescription(request.getDescription());
 
-		InsuranceProduct product = productRepository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Product not found with id : " + id));
+        product = productRepository.save(product);
+        log.info("Product updated: productId={}", product.getProductId());
+        return mapToResponse(product);
+    }
 
-		return new ProductResponse(product.getProductId(), product.getProductName(), product.getProductType().name(),
-				product.getDescription(), product.isActive());
-	}
+    @Override
+    public ProductResponse getProductById(Long id) {
+        return mapToResponse(findProduct(id));
+    }
 
-	@Override
-	public ProductResponse updateProduct(Long id, ProductRequest request) {
+    @Override
+    public PagedResponse<ProductResponse> getAllProducts(int page, int size, String sortBy, String sortDir) {
+        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
+        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Page<InsuranceProduct> productPage = productRepository.findAll(pageable);
+        return toPagedResponse(productPage);
+    }
 
-		InsuranceProduct product = productRepository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+    @Override
+    public PagedResponse<ProductResponse> getActiveProducts(int page, int size, String sortBy, String sortDir) {
+        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
+        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Page<InsuranceProduct> productPage = productRepository.findByActiveTrue(pageable);
+        return toPagedResponse(productPage);
+    }
 
-		product.setProductName(request.getProductName());
+    @Override
+    public void deactivateProduct(Long id) {
+        InsuranceProduct product = findProduct(id);
+        product.setActive(false);
+        productRepository.save(product);
+        log.info("Product deactivated: productId={}", id);
+    }
 
-		product.setProductType(request.getProductType());
+    @Override
+    public void activateProduct(Long id) {
+        InsuranceProduct product = findProduct(id);
+        product.setActive(true);
+        productRepository.save(product);
+        log.info("Product activated: productId={}", id);
+    }
 
-		product.setDescription(request.getDescription());
+    private InsuranceProduct findProduct(Long id) {
+        return productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with ID: " + id));
+    }
 
-		product.setActive(request.isActive());
+    private ProductType parseProductType(String type) {
+        try {
+            return ProductType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid product type: " + type + ". Valid values: HEALTH, MOTOR, LIFE, TRAVEL");
+        }
+    }
 
-		productRepository.save(product);
+    private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
+        Sort sort = "desc".equalsIgnoreCase(sortDir)
+                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        return PageRequest.of(page, size, sort);
+    }
 
-		return new ProductResponse(product.getProductId(), product.getProductName(), product.getProductType().name(),
-				product.getDescription(), product.isActive());
-	}
+    private PagedResponse<ProductResponse> toPagedResponse(Page<InsuranceProduct> productPage) {
+        List<ProductResponse> records = productPage.getContent().stream().map(this::mapToResponse).toList();
+        return PagedResponse.<ProductResponse>builder()
+                .records(records)
+                .currentPage(productPage.getNumber())
+                .pageSize(productPage.getSize())
+                .totalRecords(productPage.getTotalElements())
+                .totalPages(productPage.getTotalPages())
+                .isLastPage(productPage.isLast())
+                .build();
+    }
 
-	@Override
-	public void deactivateProduct(Long id) {
-
-		InsuranceProduct product = productRepository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Product Not Found"));
-
-		product.setActive(false);
-
-		productRepository.save(product);
-	}
+    private ProductResponse mapToResponse(InsuranceProduct p) {
+        return new ProductResponse(p.getProductId(), p.getProductName(),
+                p.getProductType().name(), p.getDescription(), p.isActive());
+    }
 }

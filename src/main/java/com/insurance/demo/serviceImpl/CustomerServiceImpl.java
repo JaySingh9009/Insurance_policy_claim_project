@@ -1,121 +1,185 @@
 package com.insurance.demo.serviceImpl;
 
-import java.util.List;
-
-import org.springframework.stereotype.Service;
-
 import com.insurance.demo.dto.CustomerRequest;
 import com.insurance.demo.dto.CustomerResponse;
+import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.User;
+import com.insurance.demo.exception.BadRequestException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.CustomerRepository;
 import com.insurance.demo.repository.UserRepository;
 import com.insurance.demo.service.CustomerService;
-
+import com.insurance.demo.util.PaginationValidator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CustomerServiceImpl implements CustomerService {
 
-	private final CustomerRepository customerRepository;
+    private static final Set<String> ALLOWED_SORT_FIELDS =
+            Set.of("createdAt", "city", "state");
 
-	private final UserRepository userRepository;
+    private final CustomerRepository customerRepository;
+    private final UserRepository userRepository;
 
-//	@Override
-//	public CustomerResponse createCustomer(CustomerRequest request) {
-//
-//		User user = userRepository.findById(request.getUserId())
-//				.orElseThrow(() -> new RuntimeException("User Not Found"));
-//
-//		Customer customer = Customer.builder().address(request.getAddress()).city(request.getCity())
-//				.state(request.getState()).pincode(request.getPincode()).nomineeName(request.getNomineeName())
-//				.nomineeRelation(request.getNomineeRelation()).user(user).build();
-//
-//		customerRepository.save(customer);
-//
-//		return new CustomerResponse(customer.getCustomerId(), user.getFullName(), customer.getCity(),
-//				customer.getNomineeName());
-//	}
+    @Override
+    public CustomerResponse createProfile(
+            CustomerRequest request,
+            Long userId) {
 
-	@Override
-	public CustomerResponse createProfile(String email, CustomerRequest request) {
+        log.info("Creating customer profile for userId={}", userId);
 
-		User user = userRepository.findByEmail(email)
-				.orElseThrow(() -> new ResourceNotFoundException("User Not Found"));
+        User user = findUser(userId);
 
-		// Ek user ka sirf ek hi customer profile ho
-		if (customerRepository.findByUser_Id(user.getId()).isPresent()) {
+        if (customerRepository.findByUser_Id(userId).isPresent()) {
+            throw new BadRequestException(
+                    "Customer profile already exists for this account");
+        }
 
-			throw new RuntimeException("Customer profile already exists");
-		}
+        Customer customer = Customer.builder()
+                .user(user)
+                .dateOfBirth(request.getDateOfBirth())
+                .address(request.getAddress())
+                .city(request.getCity())
+                .state(request.getState())
+                .pincode(request.getPincode())
+                .nomineeName(request.getNomineeName())
+                .nomineeRelation(request.getNomineeRelation())
+                .build();
 
-		Customer customer = Customer.builder().address(request.getAddress()).city(request.getCity())
-				.state(request.getState()).pincode(request.getPincode()).nomineeName(request.getNomineeName())
-				.nomineeRelation(request.getNomineeRelation()).user(user).build();
+        customer = customerRepository.save(customer);
 
-		customer = customerRepository.save(customer);
+        log.info(
+                "Customer profile created successfully. customerId={}",
+                customer.getCustomerId());
 
-		return mapToResponse(customer);
-	}
+        return mapToResponse(customer);
+    }
 
-//	@Override
-//	public CustomerResponse getCustomer(Long userId) {
-//
-//		Customer customer = customerRepository.findByUser_Id(userId)
-//				.orElseThrow(() -> new ResourceNotFoundException("Customer Not Found"));
-//
-//		return mapToResponse(customer);
-//	}
+    @Override
+    public CustomerResponse updateProfile(
+            CustomerRequest request,
+            Long userId) {
 
-	@Override
-	public CustomerResponse getCustomerProfile(String email) {
+        log.info("Updating customer profile for userId={}", userId);
 
-		User user = userRepository.findByEmail(email)
-				.orElseThrow(() -> new ResourceNotFoundException("User Not Found"));
+        Customer customer = customerRepository.findByUser_Id(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer profile not found"));
 
-		Customer customer = customerRepository.findByUser_Id(user.getId())
-				.orElseThrow(() -> new ResourceNotFoundException("Customer Profile Not Found"));
+        customer.setDateOfBirth(request.getDateOfBirth());
+        customer.setAddress(request.getAddress());
+        customer.setCity(request.getCity());
+        customer.setState(request.getState());
+        customer.setPincode(request.getPincode());
+        customer.setNomineeName(request.getNomineeName());
+        customer.setNomineeRelation(request.getNomineeRelation());
 
-		return mapToResponse(customer);
-	}
+        customer = customerRepository.save(customer);
 
-	@Override
-	public List<CustomerResponse> getAllCustomers() {
+        return mapToResponse(customer);
+    }
 
-		return customerRepository.findAll().stream().map(this::mapToResponse).toList();
-	}
+    @Override
+    public CustomerResponse getMyProfile(Long userId) {
 
-	@Override
-	public CustomerResponse updateProfile(String email, CustomerRequest request) {
+        Customer customer = customerRepository.findByUser_Id(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer profile not found"));
 
-		User user = userRepository.findByEmail(email)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return mapToResponse(customer);
+    }
 
-		Customer customer = customerRepository.findByUser_Id(user.getId())
-				.orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+    @Override
+    public PagedResponse<CustomerResponse> getAllCustomers(
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
 
-		customer.setAddress(request.getAddress());
-		customer.setCity(request.getCity());
-		customer.setState(request.getState());
-		customer.setPincode(request.getPincode());
-		customer.setNomineeName(request.getNomineeName());
-		customer.setNomineeRelation(request.getNomineeRelation());
+        PaginationValidator.validate(
+                page,
+                size,
+                sortBy,
+                ALLOWED_SORT_FIELDS);
 
-		customerRepository.save(customer);
+        Sort sort = "desc".equalsIgnoreCase(sortDir)
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
 
-		return mapToResponse(customer);
-	}
+        Pageable pageable =
+                PageRequest.of(page, size, sort);
 
-	private CustomerResponse mapToResponse(Customer customer) {
+        Page<Customer> customerPage =
+                customerRepository.findAll(pageable);
 
-		User user = customer.getUser();
+        List<CustomerResponse> records =
+                customerPage.getContent()
+                        .stream()
+                        .map(this::mapToResponse)
+                        .toList();
 
-		return CustomerResponse.builder().customerId(customer.getCustomerId()).customerName(user.getFullName())
-				.address(customer.getAddress()).city(customer.getCity()).state(customer.getState())
-				.pincode(customer.getPincode()).nomineeName(customer.getNomineeName())
-				.nomineeRelation(customer.getNomineeRelation()).createdAt(customer.getCreatedAt())
-				.updatedAt(customer.getUpdatedAt()).build();
-	}
+        return PagedResponse.<CustomerResponse>builder()
+                .records(records)
+                .currentPage(customerPage.getNumber())
+                .pageSize(customerPage.getSize())
+                .totalRecords(customerPage.getTotalElements())
+                .totalPages(customerPage.getTotalPages())
+                .isLastPage(customerPage.isLast())
+                .build();
+    }
+
+    @Override
+    public CustomerResponse getCustomerById(Long customerId) {
+
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer not found with ID: "
+                                        + customerId));
+
+        return mapToResponse(customer);
+    }
+
+    private User findUser(Long userId) {
+
+        return userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found with ID: "
+                                        + userId));
+    }
+
+    private CustomerResponse mapToResponse(Customer customer) {
+
+        return CustomerResponse.builder()
+                .customerId(customer.getCustomerId())
+                .fullName(customer.getUser().getFullName())
+                .email(customer.getUser().getEmail())
+                .mobileNumber(customer.getUser().getMobileNumber())
+                .dateOfBirth(customer.getDateOfBirth())
+                .address(customer.getAddress())
+                .city(customer.getCity())
+                .state(customer.getState())
+                .pincode(customer.getPincode())
+                .nomineeName(customer.getNomineeName())
+                .nomineeRelation(customer.getNomineeRelation())
+                .createdAt(customer.getCreatedAt())
+                .updatedAt(customer.getUpdatedAt())
+                .build();
+    }
 }

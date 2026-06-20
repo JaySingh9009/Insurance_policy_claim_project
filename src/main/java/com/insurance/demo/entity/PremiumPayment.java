@@ -1,28 +1,15 @@
 package com.insurance.demo.entity;
 
-import java.time.LocalDateTime;
-
 import com.insurance.demo.enums.PaymentMethod;
 import com.insurance.demo.enums.PaymentStatus;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "payments")
+@Table(name = "premium_payments")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -30,24 +17,29 @@ import lombok.Setter;
 @Builder
 public class PremiumPayment {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long paymentId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long paymentId;
 
-	private Double amount;
+    @ManyToOne
+    @JoinColumn(name = "policy_id", nullable = false)
+    private Policy policy;
 
-	private LocalDateTime paymentDate;
+    @Column(nullable = false)
+    private Double amount;
 
-	@Enumerated(EnumType.STRING)
-	private PaymentMethod paymentMethod;
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime paymentDate;
 
-	@Enumerated(EnumType.STRING)
-	private PaymentStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PaymentMethod paymentMethod;
 
-	@Column(unique = true)
-	private String transactionId;
+    @Column(unique = true, nullable = false)
+    private String transactionReference;
 
-	@ManyToOne
-	@JoinColumn(name = "policy_id")
-	private Policy policy;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PaymentStatus paymentStatus;
 }
