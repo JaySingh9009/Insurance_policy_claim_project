@@ -11,11 +11,13 @@ import com.insurance.demo.dto.PurchasePolicyRequest;
 import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.Policy;
 import com.insurance.demo.entity.PolicyPlan;
+import com.insurance.demo.entity.User;
 import com.insurance.demo.enums.PolicyStatus;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.CustomerRepository;
 import com.insurance.demo.repository.PolicyPlanRepository;
 import com.insurance.demo.repository.PolicyRepository;
+import com.insurance.demo.repository.UserRepository;
 import com.insurance.demo.service.PolicyService;
 
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class PolicyServiceImpl implements PolicyService {
     private final CustomerRepository customerRepository;
 
     private final PolicyPlanRepository planRepository;
+    private final UserRepository userRepository;
 
     @Override
     public PolicyResponse purchasePolicy(
@@ -201,6 +204,40 @@ public class PolicyServiceImpl implements PolicyService {
                                         .getPlanName(),
                                 policy.getStatus()
                                         .name()))
+                .toList();
+    }
+    
+    @Override
+    public List<PolicyResponse> getMyPolicies(
+            String email) {
+
+        User user = userRepository
+                .findByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User Not Found"));
+
+        Customer customer = customerRepository
+                .findByUser_Id(user.getId())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer Not Found"));
+
+        return policyRepository
+                .findByCustomerCustomerId(
+                        customer.getCustomerId())
+                .stream()
+                .map(policy -> new PolicyResponse(
+                        policy.getPolicyId(),
+                        policy.getPolicyNumber(),
+                        policy.getCustomer()
+                                .getUser()
+                                .getFullName(),
+                        policy.getPlan()
+                                .getPlanName(),
+                        policy.getStatus()
+                                .name()
+                ))
                 .toList();
     }
     

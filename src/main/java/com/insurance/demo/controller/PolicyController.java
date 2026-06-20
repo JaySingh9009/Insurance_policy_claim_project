@@ -1,6 +1,7 @@
 package com.insurance.demo.controller;
 
 import java.util.List;
+import org.springframework.security.core.Authentication;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -65,5 +66,16 @@ public class PolicyController {
 	public ResponseEntity<PolicyResponse> getPolicy(@PathVariable Long policyId) {
 
 		return ResponseEntity.ok(policyService.getPolicyById(policyId));
+	}
+	
+	@GetMapping("/my-policies")
+	@PreAuthorize("hasRole('CUSTOMER')")
+	public ResponseEntity<List<PolicyResponse>>
+	getMyPolicies(
+	        Authentication authentication) {
+
+	    return ResponseEntity.ok(
+	            policyService.getMyPolicies(
+	                    authentication.getName()));
 	}
 }

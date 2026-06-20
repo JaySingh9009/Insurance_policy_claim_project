@@ -1,9 +1,13 @@
 package com.insurance.demo.controller;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,25 +23,52 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CustomerController {
 
-    private final CustomerService customerService;
+	private final CustomerService customerService;
 
-    @PostMapping
-    public ResponseEntity<CustomerResponse>
-    createCustomer(
-            @RequestBody CustomerRequest request){
+//	@PostMapping
+//	public ResponseEntity<CustomerResponse> createCustomer(@RequestBody CustomerRequest request) {
+//
+//		return ResponseEntity.ok(customerService.createCustomer(request));
+//	}
 
-        return ResponseEntity.ok(
-                customerService
-                .createCustomer(request));
-    }
+	@PostMapping("/profile")
+	@PreAuthorize("hasRole('CUSTOMER')")
+	public ResponseEntity<CustomerResponse> createProfile(@RequestBody CustomerRequest request,
+			Authentication authentication) {
 
-    @GetMapping("/{userId}")
-    public ResponseEntity<CustomerResponse>
-    getCustomer(
-            @PathVariable Long userId){
+		return ResponseEntity.ok(customerService.createProfile(authentication.getName(), request));
+	}
 
-        return ResponseEntity.ok(
-                customerService
-                .getCustomer(userId));
-    }
+//	@GetMapping("/{userId}")
+//	public ResponseEntity<CustomerResponse> getCustomer(@PathVariable Long userId) {
+//
+//		return ResponseEntity.ok(customerService.getCustomer(userId));
+//	}
+	
+	@GetMapping("/profile")
+	@PreAuthorize("hasRole('CUSTOMER')")
+	public ResponseEntity<CustomerResponse>
+	getProfile(Authentication authentication) {
+
+	    return ResponseEntity.ok(
+	            customerService.getCustomerProfile(
+	                    authentication.getName()));
+	}
+
+	@GetMapping
+	@PreAuthorize("hasRole('ADMIN')")
+	public ResponseEntity<List<CustomerResponse>> getAllCustomers() {
+
+		return ResponseEntity.ok(customerService.getAllCustomers());
+	}
+
+	@PutMapping("/profile")
+	@PreAuthorize("hasRole('CUSTOMER')")
+	public ResponseEntity<CustomerResponse> updateProfile(@RequestBody CustomerRequest request,
+			Authentication authentication) {
+
+		String email = authentication.getName();
+
+		return ResponseEntity.ok(customerService.updateProfile(email, request));
+	}
 }

@@ -17,5 +17,5 @@ public class CustomerRequest {
 
     private String nomineeRelation;
 
-    private Long userId;
+//    private Long userId;
 }
