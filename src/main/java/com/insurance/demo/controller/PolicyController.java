@@ -64,15 +64,17 @@ public class PolicyController {
             @RequestParam(defaultValue = "desc") String sortDir) {
         return ResponseEntity.ok(policyService.getAllPolicies(page, size, sortBy, sortDir));
     }
-
+    
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @GetMapping("/{id}")
     @Operation(summary = "Get policy by ID")
     public ResponseEntity<PolicyResponse> getPolicyById(@PathVariable Long id) {
         return ResponseEntity.ok(policyService.getPolicyById(id));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancel a policy (Customer for own, Admin/Agent for any)")
+    @Operation(summary = "Cancel a policy (Admin/Agent only)")
     public ResponseEntity<PolicyResponse> cancelPolicy(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails principal) {

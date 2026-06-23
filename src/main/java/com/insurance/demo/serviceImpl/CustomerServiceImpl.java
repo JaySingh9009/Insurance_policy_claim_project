@@ -1,5 +1,16 @@
 package com.insurance.demo.serviceImpl;
 
+import java.time.LocalDate;
+import java.time.Period;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+
 import com.insurance.demo.dto.CustomerRequest;
 import com.insurance.demo.dto.CustomerResponse;
 import com.insurance.demo.dto.PagedResponse;
@@ -11,16 +22,9 @@ import com.insurance.demo.repository.CustomerRepository;
 import com.insurance.demo.repository.UserRepository;
 import com.insurance.demo.service.CustomerService;
 import com.insurance.demo.util.PaginationValidator;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +47,18 @@ public class CustomerServiceImpl implements CustomerService {
             log.warn("Customer profile already exists for userId={}", userId);
             throw new BadRequestException("Customer profile already exists for this account");
         }
+        
+  
+
+     if (request.getDateOfBirth() != null) {
+         int age = Period.between(request.getDateOfBirth(), LocalDate.now()).getYears();
+         if (age < 18) {
+             throw new BadRequestException("Customer must be at least 18 years old to register");
+         }
+         if (age > 100) {
+             throw new BadRequestException("Please enter a valid date of birth");
+         }
+     }
 
         Customer customer = Customer.builder()
                 .user(user)
@@ -63,6 +79,18 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     public CustomerResponse updateProfile(CustomerRequest request, Long userId) {
         log.info("Updating customer profile for userId={}", userId);
+        
+ 
+
+     if (request.getDateOfBirth() != null) {
+         int age = Period.between(request.getDateOfBirth(), LocalDate.now()).getYears();
+         if (age < 18) {
+             throw new BadRequestException("Customer must be at least 18 years old to register");
+         }
+         if (age > 100) {
+             throw new BadRequestException("Please enter a valid date of birth");
+         }
+     }
 
         Customer customer = customerRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for this account"));

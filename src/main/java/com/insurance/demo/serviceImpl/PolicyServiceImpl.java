@@ -103,15 +103,6 @@ public class PolicyServiceImpl implements PolicyService {
 
         Policy policy = findPolicy(policyId);
 
-        // CUSTOMER can only cancel their own policy
-        if ("CUSTOMER".equals(role)) {
-            Customer customer = customerRepository.findByUser_Id(requestingUserId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found"));
-            if (!policy.getCustomer().getCustomerId().equals(customer.getCustomerId())) {
-                throw new UnauthorizedAccessException("You are not authorized to cancel this policy");
-            }
-        }
-
         if (policy.getStatus() == PolicyStatus.CANCELLED) {
             throw new InvalidPolicyStatusException("Policy is already cancelled");
         }

@@ -1,6 +1,11 @@
 package com.insurance.demo.dto;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -13,10 +18,12 @@ public class ClaimRequest {
     private Long policyId;
 
     @NotNull(message = "Claim amount is required")
+    @DecimalMin(value = "1.0", message = "Claim amount must be at least 1")
     @Positive(message = "Claim amount must be positive")
     private Double claimAmount;
 
     @NotBlank(message = "Claim reason is required")
+    @Size(min = 10, max = 1000, message = "Claim reason must be between 10 and 1000 characters")
     private String claimReason;
 
     @NotNull(message = "Incident date is required")
@@ -24,6 +31,6 @@ public class ClaimRequest {
     private LocalDate incidentDate;
 
     @NotNull(message = "At least one document is required")
-    @Size(min = 1, message = "At least one document must be submitted with the claim")
+    @Size(min = 1, max = 10, message = "You must submit between 1 and 10 documents")
     private List<ClaimDocumentRequest> documents;
 }

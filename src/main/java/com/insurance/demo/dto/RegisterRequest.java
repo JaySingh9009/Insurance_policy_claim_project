@@ -10,6 +10,7 @@ import lombok.Data;
 public class RegisterRequest {
 
     @NotBlank(message = "Full name is required")
+    @Size(min = 2, max = 100, message = "Full name must be between 2 and 100 characters")
     private String fullName;
 
     @NotBlank(message = "Email is required")
@@ -17,19 +18,18 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least 8 characters")
+    @Size(min = 8, max = 64, message = "Password must be between 8 and 64 characters")
+    @Pattern(
+        regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[@$!%*?&_#])[A-Za-z\\d@$!%*?&_#]{8,}$",
+        message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character (@$!%*?&_#)"
+    )
     private String password;
 
     @NotBlank(message = "Mobile number is required")
-    @Pattern(regexp = "^\\d{10}$", message = "Mobile number must be exactly 10 digits")
+    @Pattern(regexp = "^[6-9]\\d{9}$", message = "Mobile number must be a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9")
     private String mobileNumber;
 
-    /**
-     * User chooses where to receive their OTP during registration.
-     * Accepted values: "email" or "phone"
-     */
     @NotBlank(message = "Verification channel is required. Use 'email' or 'phone'")
-    @Pattern(regexp = "(?i)email|phone",
-             message = "verificationChannel must be 'email' or 'phone'")
+    @Pattern(regexp = "(?i)email|phone", message = "verificationChannel must be 'email' or 'phone'")
     private String verificationChannel;
 }
