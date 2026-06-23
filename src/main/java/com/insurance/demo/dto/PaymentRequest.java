@@ -23,6 +23,6 @@ public class PaymentRequest {
     @NotBlank(message = "Transaction reference is required")
     private String transactionReference;
 
-    @NotNull(message = "Payment status is required")
+    @NotNull(message = "Payment status is required") 	
     private PaymentStatus paymentStatus;
 }

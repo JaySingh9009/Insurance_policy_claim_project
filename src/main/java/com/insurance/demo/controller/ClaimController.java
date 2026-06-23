@@ -21,8 +21,7 @@ public class ClaimController {
 
     private final ClaimService claimService;
 
-    // ─── Customer: Submit Claim ───────────────────────────────────────────────
-
+    
     @PreAuthorize("hasRole('CUSTOMER')")
     @PostMapping
     @Operation(summary = "Submit a new claim (Customer only)")
@@ -33,8 +32,7 @@ public class ClaimController {
                 .body(claimService.submitClaim(request, principal.getUser().getId()));
     }
 
-    // ─── Customer: My Claims ──────────────────────────────────────────────────
-
+    
     @PreAuthorize("hasRole('CUSTOMER')")
     @GetMapping("/my")
     @Operation(summary = "Get my claims (Customer only)")
@@ -48,8 +46,7 @@ public class ClaimController {
                 principal.getUser().getId(), page, size, sortBy, sortDir));
     }
 
-    // ─── Agent: Review / Recommend ────────────────────────────────────────────
-
+    
     @PreAuthorize("hasRole('AGENT')")
     @PatchMapping("/{id}/review")
     @Operation(summary = "Agent moves claim to UNDER_REVIEW")
@@ -57,8 +54,7 @@ public class ClaimController {
             @PathVariable Long id,
             @Valid @RequestBody AgentRemarkRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
-        // Force targetStatus to UNDER_REVIEW for this endpoint
-        request.setTargetStatus("UNDER_REVIEW");
+                request.setTargetStatus("UNDER_REVIEW");
         return ResponseEntity.ok(claimService.updateClaimStatus(id, request, principal.getUser().getId()));
     }
 
@@ -72,7 +68,6 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.updateClaimStatus(id, request, principal.getUser().getId()));
     }
 
-    // ─── Admin: Final Decision ────────────────────────────────────────────────
 
     @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/decision")
@@ -84,7 +79,6 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.makeClaimDecision(id, request, principal.getUser().getId()));
     }
 
-    // ─── Admin/Agent: All Claims ──────────────────────────────────────────────
 
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @GetMapping
@@ -97,15 +91,13 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.getAllClaims(page, size, sortBy, sortDir));
     }
 
-    // ─── Get Claim by ID ──────────────────────────────────────────────────────
-
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @GetMapping("/{id}")
     @Operation(summary = "Get claim by ID")
     public ResponseEntity<ClaimResponse> getClaimById(@PathVariable Long id) {
         return ResponseEntity.ok(claimService.getClaimById(id));
     }
 
-    // ─── Claim History ────────────────────────────────────────────────────────
 
     @GetMapping("/{id}/history")
     @Operation(summary = "Get claim status history (Admin/Agent/Customer for own claim)")
