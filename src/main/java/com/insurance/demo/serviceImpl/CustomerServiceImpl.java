@@ -47,8 +47,9 @@ public class CustomerServiceImpl implements CustomerService {
             log.warn("Customer profile already exists for userId={}", userId);
             throw new BadRequestException("Customer profile already exists for this account");
         }
-        
-  
+        if (request.getNomineeName() != null && request.getNomineeName().equalsIgnoreCase(user.getFullName())) {
+            throw new BadRequestException("Nominee name cannot be identical to the customer's own name");
+        }
 
      if (request.getDateOfBirth() != null) {
          int age = Period.between(request.getDateOfBirth(), LocalDate.now()).getYears();
@@ -94,6 +95,10 @@ public class CustomerServiceImpl implements CustomerService {
 
         Customer customer = customerRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for this account"));
+
+        if (request.getNomineeName() != null && request.getNomineeName().equalsIgnoreCase(customer.getUser().getFullName())) {
+            throw new BadRequestException("Nominee name cannot be identical to the customer's own name");
+        }
 
         customer.setDateOfBirth(request.getDateOfBirth());
         customer.setAddress(request.getAddress());

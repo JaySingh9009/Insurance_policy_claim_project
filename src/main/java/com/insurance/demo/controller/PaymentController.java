@@ -52,4 +52,24 @@ public class PaymentController {
             @RequestParam(defaultValue = "desc") String sortDir) {
         return ResponseEntity.ok(paymentService.getAllPayments(page, size, sortBy, sortDir));
     }
+    
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @GetMapping("/my")
+    public ResponseEntity<PagedResponse<PaymentResponse>> getMyPayments(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "paymentDate") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+
+        return ResponseEntity.ok(
+                paymentService.getMyPayments(
+                        principal.getUser().getId(),
+                        page,
+                        size,
+                        sortBy,
+                        sortDir
+                )
+        );
+    }
 }

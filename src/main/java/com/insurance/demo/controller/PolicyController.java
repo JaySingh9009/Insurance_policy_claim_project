@@ -34,9 +34,9 @@ public class PolicyController {
                 .body(policyService.purchasePolicy(request, principal.getUser().getId()));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PreAuthorize("hasRole('AGENT')")
     @PostMapping("/issue")
-    @Operation(summary = "Admin/Agent issues policy to a specific customer")
+    @Operation(summary = "Agent issues policy to a specific customer")
     public ResponseEntity<PolicyResponse> issuePolicy(@Valid @RequestBody IssuePolicyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(policyService.issuePolicy(request));
     }

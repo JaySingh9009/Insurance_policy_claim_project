@@ -47,6 +47,12 @@ public class Policy {
     @Builder.Default
     private Double totalPremiumPaid = 0.0;
 
+    @Column
+    private LocalDate lastPaymentDate;
+
+    @Column
+    private LocalDate nextPaymentDueDate;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
