@@ -412,6 +412,7 @@ public class ClaimServiceImpl implements ClaimService {
                 .agentRemarks(c.getAgentRemarks())
                 .adminRemarks(c.getAdminRemarks())
                 .suspicious(c.isSuspicious())
+                .customerName(c.getPolicy().getCustomer().getUser().getFullName())
                 .assignedAgentId(c.getAssignedAgent() != null ? c.getAssignedAgent().getId() : null)
                 .assignedAgentName(c.getAssignedAgent() != null ? c.getAssignedAgent().getFullName() : null)
                 .fraudRiskScore(c.getFraudRiskScore())
