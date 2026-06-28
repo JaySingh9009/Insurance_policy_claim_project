@@ -18,10 +18,13 @@ import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.Policy;
 import com.insurance.demo.entity.PolicyPlan;
 import com.insurance.demo.enums.PolicyStatus;
+import com.insurance.demo.enums.ProductType;
 import com.insurance.demo.exception.BadRequestException;
 import com.insurance.demo.exception.InvalidPolicyStatusException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.exception.UnauthorizedAccessException;
+import com.insurance.demo.enums.ClaimStatus;
+import com.insurance.demo.repository.ClaimRepository;
 import com.insurance.demo.repository.CustomerRepository;
 import com.insurance.demo.repository.PolicyPlanRepository;
 import com.insurance.demo.repository.PolicyRepository;
@@ -42,6 +45,7 @@ public class PolicyServiceImpl implements PolicyService {
 	private final PolicyRepository policyRepository;
 	private final PolicyPlanRepository planRepository;
 	private final CustomerRepository customerRepository;
+	private final ClaimRepository claimRepository;
 
 	@Override
 	public PolicyResponse purchasePolicy(PurchasePolicyRequest request, Long userId) {
@@ -53,15 +57,23 @@ public class PolicyServiceImpl implements PolicyService {
 
 		PolicyPlan plan = findActivePlan(request.getPlanId());
 
-		LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+		validateNoDuplicatePolicy(customer, plan);
 
+		LocalDate startDate = (request.getStartDate() != null) ? request.getStartDate() : LocalDate.now();
 		if (startDate.isBefore(LocalDate.now())) {
 			throw new BadRequestException("Start date cannot be in the past");
 		}
 
-		Policy policy = Policy.builder().policyNumber(NumberGenerator.generatePolicyNumber()).customer(customer)
-				.plan(plan).startDate(startDate).endDate(startDate.plusYears(plan.getDurationInYears()))
-				.status(PolicyStatus.PENDING_PAYMENT).totalPremiumPaid(0.0).build();
+		Policy policy = Policy.builder()
+				.policyNumber(NumberGenerator.generatePolicyNumber())
+				.customer(customer)
+				.plan(plan)
+				.startDate(startDate)
+				.endDate(startDate.plusYears(plan.getDurationInYears()))
+				.status(PolicyStatus.PENDING_PAYMENT) // always starts as PENDING_PAYMENT
+				.totalPremiumPaid(0.0)
+				.nextPaymentDueDate(startDate)
+				.build();
 
 		policy = policyRepository.save(policy);
 
@@ -81,11 +93,20 @@ public class PolicyServiceImpl implements PolicyService {
 
 		PolicyPlan plan = findActivePlan(request.getPlanId());
 
+		validateNoDuplicatePolicy(customer, plan);
+
 		LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
 
-		Policy policy = Policy.builder().policyNumber(NumberGenerator.generatePolicyNumber()).customer(customer)
-				.plan(plan).startDate(startDate).endDate(startDate.plusYears(plan.getDurationInYears()))
-				.status(PolicyStatus.PENDING_PAYMENT).totalPremiumPaid(0.0).build();
+		Policy policy = Policy.builder()
+				.policyNumber(NumberGenerator.generatePolicyNumber())
+				.customer(customer)
+				.plan(plan)
+				.startDate(startDate)
+				.endDate(startDate.plusYears(plan.getDurationInYears()))
+				.status(PolicyStatus.PENDING_PAYMENT)
+				.totalPremiumPaid(0.0)
+				.nextPaymentDueDate(startDate)
+				.build();
 
 		policy = policyRepository.save(policy);
 
@@ -97,26 +118,23 @@ public class PolicyServiceImpl implements PolicyService {
 
 		Policy policy = findPolicy(policyId);
 
-//<<<<<<< HEAD
-//        if ("CUSTOMER".equals(role)) {
-//
-//            Customer customer = customerRepository
-//                    .findByUser_Id(requestingUserId)
-//                    .orElseThrow(() ->
-//                            new ResourceNotFoundException(
-//                                    "Customer profile not found"));
-//
-//            if (!policy.getCustomer()
-//                    .getCustomerId()
-//                    .equals(customer.getCustomerId())) {
-//
-//                throw new UnauthorizedAccessException(
-//                        "You are not authorized to cancel this policy");
-//            }
-//        }
-//
-//=======
-//>>>>>>> refs/remotes/origin/jay
+		if ("CUSTOMER".equals(role)) {
+
+			Customer customer = customerRepository
+					.findByUser_Id(requestingUserId)
+					.orElseThrow(() ->
+							new ResourceNotFoundException(
+									"Customer profile not found"));
+
+			if (!policy.getCustomer()
+					.getCustomerId()
+					.equals(customer.getCustomerId())) {
+
+				throw new UnauthorizedAccessException(
+						"You are not authorized to cancel this policy");
+			}
+		}
+
 		if (policy.getStatus() == PolicyStatus.CANCELLED) {
 			throw new InvalidPolicyStatusException("Policy is already cancelled");
 		}
@@ -125,9 +143,17 @@ public class PolicyServiceImpl implements PolicyService {
 			throw new InvalidPolicyStatusException("Cannot cancel an expired policy");
 		}
 
-		policy.setStatus(PolicyStatus.CANCELLED);
+		// Enforce no open/unresolved claims exist
+		boolean hasActiveClaims = claimRepository.existsByPolicyPolicyIdAndStatusNotIn(
+				policyId, List.of(ClaimStatus.APPROVED, ClaimStatus.REJECTED));
+		if (hasActiveClaims) {
+			throw new BadRequestException("Cannot cancel a policy that has pending or unresolved claims");
+		}
 
+		policy.setStatus(PolicyStatus.CANCELLED);
 		policyRepository.save(policy);
+
+		log.info("Policy cancelled: policyId={}", policyId);
 
 		return mapToResponse(policy);
 	}
@@ -199,13 +225,62 @@ public class PolicyServiceImpl implements PolicyService {
 				.totalPages(policyPage.getTotalPages()).isLastPage(policyPage.isLast()).build();
 	}
 
-	private PolicyResponse mapToResponse(Policy policy) {
+	/**
+	 * Stops a customer from holding more than one active/pending/lapsed policy
+	 * for the same product type (e.g. two HEALTH policies at once). LIFE
+	 * products are exempt since customers may legitimately hold multiple
+	 * life policies.
+	 */
+	private void validateNoDuplicatePolicy(Customer customer, PolicyPlan plan) {
+		ProductType targetProductType = plan.getProduct().getProductType();
+		if (targetProductType != ProductType.LIFE) {
+			List<Policy> existingPolicies = policyRepository.findByCustomerCustomerId(customer.getCustomerId());
+			boolean hasDuplicate = existingPolicies.stream().anyMatch(p ->
+					p.getPlan().getProduct().getProductType() == targetProductType &&
+					(p.getStatus() == PolicyStatus.ACTIVE ||
+					 p.getStatus() == PolicyStatus.PENDING_PAYMENT ||
+					 p.getStatus() == PolicyStatus.LAPSED)
+			);
+			if (hasDuplicate) {
+				throw new BadRequestException("Customer already has an active, pending, or lapsed policy for product type: "
+						+ targetProductType + ". Only multiple LIFE policies are allowed.");
+			}
+		}
+	}
 
-		return PolicyResponse.builder().policyId(policy.getPolicyId()).policyNumber(policy.getPolicyNumber())
-				.customerId(policy.getCustomer().getCustomerId())
-				.customerName(policy.getCustomer().getUser().getFullName()).planId(policy.getPlan().getPlanId())
-				.planName(policy.getPlan().getPlanName()).startDate(policy.getStartDate()).endDate(policy.getEndDate())
-				.status(policy.getStatus().name()).totalPremiumPaid(policy.getTotalPremiumPaid())
-				.createdAt(policy.getCreatedAt()).build();
+	/**
+	 * If an ACTIVE policy's next payment is more than 30 days overdue,
+	 * automatically flips it to LAPSED. Called whenever a policy is mapped
+	 * to a response, so the status shown to the user is always current.
+	 */
+	private void checkAndSetLapsed(Policy p) {
+		if (p.getStatus() == PolicyStatus.ACTIVE && p.getNextPaymentDueDate() != null) {
+			if (LocalDate.now().isAfter(p.getNextPaymentDueDate().plusDays(30))) {
+				p.setStatus(PolicyStatus.LAPSED);
+				policyRepository.save(p);
+				log.info("Policy ID {} status updated to LAPSED due to overdue payment", p.getPolicyId());
+			}
+		}
+	}
+
+	private PolicyResponse mapToResponse(Policy p) {
+
+		checkAndSetLapsed(p);
+
+		return PolicyResponse.builder()
+				.policyId(p.getPolicyId())
+				.policyNumber(p.getPolicyNumber())
+				.customerId(p.getCustomer().getCustomerId())
+				.customerName(p.getCustomer().getUser().getFullName())
+				.planId(p.getPlan().getPlanId())
+				.planName(p.getPlan().getPlanName())
+				.startDate(p.getStartDate())
+				.endDate(p.getEndDate())
+				.status(p.getStatus().name())
+				.totalPremiumPaid(p.getTotalPremiumPaid())
+				.lastPaymentDate(p.getLastPaymentDate())
+				.nextPaymentDueDate(p.getNextPaymentDueDate())
+				.createdAt(p.getCreatedAt())
+				.build();
 	}
 }

@@ -46,6 +46,22 @@ public class Claim {
 
     private String adminRemarks;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean suspicious = false;
+
+    @ManyToOne
+    @JoinColumn(name = "assigned_agent_id")
+    private User assignedAgent;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer fraudRiskScore = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private String fraudRiskLevel = "LOW";
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

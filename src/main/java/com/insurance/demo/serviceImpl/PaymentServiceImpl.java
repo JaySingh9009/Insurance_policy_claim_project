@@ -8,7 +8,9 @@ import com.insurance.demo.entity.Policy;
 import com.insurance.demo.entity.PremiumPayment;
 import com.insurance.demo.enums.PaymentStatus;
 import com.insurance.demo.enums.PolicyStatus;
+import com.insurance.demo.enums.PremiumType;
 import com.insurance.demo.exception.BadRequestException;
+import java.time.LocalDate;
 import com.insurance.demo.exception.DuplicateResourceException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.exception.UnauthorizedAccessException;
@@ -63,6 +65,50 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
 
+        // Auto-lapse check: check if past nextPaymentDueDate by > 30 days
+        if (policy.getStatus() == PolicyStatus.ACTIVE && policy.getNextPaymentDueDate() != null) {
+            if (LocalDate.now().isAfter(policy.getNextPaymentDueDate().plusDays(30))) {
+                policy.setStatus(PolicyStatus.LAPSED);
+                policyRepository.save(policy);
+                log.info("Policy ID {} status updated to LAPSED due to overdue payment", policy.getPolicyId());
+            }
+        }
+
+        // Enforce policy status validations
+        if (policy.getStatus() == PolicyStatus.CANCELLED) {
+            throw new BadRequestException("Cannot pay premium for cancelled policy.");
+        }
+        if (policy.getStatus() == PolicyStatus.EXPIRED) {
+            throw new BadRequestException("Policy has expired.");
+        }
+
+        // One-time vs recurring validations
+        if (policy.getPlan().getPremiumType() == PremiumType.ONE_TIME) {
+            boolean alreadyPaid = paymentRepository.findByPolicyPolicyId(policy.getPolicyId()).stream()
+                    .anyMatch(p -> p.getPaymentStatus() == PaymentStatus.SUCCESS);
+            if (alreadyPaid) {
+                throw new BadRequestException("One-time premium has already been paid.");
+            }
+        } else {
+            // Recurring policy
+            if (policy.getStatus() == PolicyStatus.ACTIVE && policy.getNextPaymentDueDate() == null) {
+                throw new BadRequestException("This policy is already fully paid. No further payments are required.");
+            }
+        }
+
+        // Real-world check: amount must match the plan premium amount
+        if (!request.getAmount().equals(policy.getPlan().getPremiumAmount())) {
+            throw new BadRequestException("Payment amount must match the plan's premium amount: " + policy.getPlan().getPremiumAmount());
+        }
+
+        // Due date validation
+        if (policy.getStatus() == PolicyStatus.ACTIVE &&
+            policy.getNextPaymentDueDate() != null &&
+            LocalDate.now().isBefore(policy.getNextPaymentDueDate())) {
+
+            throw new BadRequestException("Next premium can be paid on or after " + policy.getNextPaymentDueDate());
+        }
+
         PremiumPayment payment = PremiumPayment.builder()
                 .policy(policy)
                 .amount(request.getAmount())
@@ -76,12 +122,51 @@ public class PaymentServiceImpl implements PaymentService {
         // Only SUCCESS payments activate the policy and update totalPremiumPaid
         if (request.getPaymentStatus() == PaymentStatus.SUCCESS) {
             policy.setTotalPremiumPaid(policy.getTotalPremiumPaid() + request.getAmount());
+            policy.setLastPaymentDate(LocalDate.now());
 
-            // Activate if total paid >= plan premium
-            if (policy.getTotalPremiumPaid() >= policy.getPlan().getPremiumAmount()) {
-                policy.setStatus(PolicyStatus.ACTIVE);
-                log.info("Policy activated after payment: policyId={}, totalPaid={}", policy.getPolicyId(), policy.getTotalPremiumPaid());
+            // Calculate next payment due date
+            PremiumType premiumType = policy.getPlan().getPremiumType();
+            if (premiumType == PremiumType.ONE_TIME) {
+                policy.setNextPaymentDueDate(null);
+            } else {
+                long successfulPaymentsCount = paymentRepository.findByPolicyPolicyId(policy.getPolicyId()).stream()
+                        .filter(p -> p.getPaymentStatus() == PaymentStatus.SUCCESS)
+                        .count();
+                
+                int durationYears = policy.getPlan().getDurationInYears();
+                int totalExpectedInstallments = durationYears;
+                if (premiumType == PremiumType.MONTHLY) {
+                    totalExpectedInstallments = 12 * durationYears;
+                } else if (premiumType == PremiumType.QUARTERLY) {
+                    totalExpectedInstallments = 4 * durationYears;
+                } else if (premiumType == PremiumType.SEMI_ANNUAL) {
+                    totalExpectedInstallments = 2 * durationYears;
+                }
+
+                if (successfulPaymentsCount >= totalExpectedInstallments) {
+                    policy.setNextPaymentDueDate(null);
+                } else {
+                    LocalDate nextDue = policy.getNextPaymentDueDate();
+                    if (nextDue == null) {
+                        nextDue = policy.getStartDate();
+                    }
+
+                    switch (premiumType) {
+                        case MONTHLY ->
+                                policy.setNextPaymentDueDate(nextDue.plusMonths(1));
+                        case QUARTERLY ->
+                                policy.setNextPaymentDueDate(nextDue.plusMonths(3));
+                        case SEMI_ANNUAL ->
+                                policy.setNextPaymentDueDate(nextDue.plusMonths(6));
+                        case ANNUAL ->
+                                policy.setNextPaymentDueDate(nextDue.plusYears(1));
+                    }
+                }
             }
+
+            policy.setStatus(PolicyStatus.ACTIVE);
+            log.info("Policy activated/updated after payment: policyId={}, totalPaid={}, nextDueDate={}", 
+                    policy.getPolicyId(), policy.getTotalPremiumPaid(), policy.getNextPaymentDueDate());
 
             policyRepository.save(policy);
         } else {
@@ -133,5 +218,30 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentStatus(p.getPaymentStatus().name())
                 .paymentDate(p.getPaymentDate())
                 .build();
+    }
+    
+    @Override
+    public PagedResponse<PaymentResponse> getMyPayments(
+            Long userId,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
+
+        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(sortDir.equalsIgnoreCase("desc")
+                        ? Sort.Direction.DESC
+                        : Sort.Direction.ASC,
+                        sortBy)
+        );
+
+        Page<PremiumPayment> paymentPage =
+                paymentRepository.findByPolicyCustomerUserId(userId, pageable);
+
+        return toPagedResponse(paymentPage);
     }
 }

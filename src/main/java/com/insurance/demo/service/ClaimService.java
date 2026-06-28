@@ -10,4 +10,5 @@ public interface ClaimService {
     PagedResponse<ClaimResponse> getAllClaims(int page, int size, String sortBy, String sortDir);
     PagedResponse<ClaimResponse> getMyClaims(Long userId, int page, int size, String sortBy, String sortDir);
     PagedResponse<ClaimHistoryResponse> getClaimHistory(Long claimId, int page, int size);
+    ClaimResponse assignAgent(Long claimId, Long agentId);
 }

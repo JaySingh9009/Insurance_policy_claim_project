@@ -21,5 +21,7 @@ public class PolicyResponse {
     private LocalDate endDate;
     private String status;
     private Double totalPremiumPaid;
+    private LocalDate lastPaymentDate;
+    private LocalDate nextPaymentDueDate;
     private LocalDateTime createdAt;
 }

@@ -9,12 +9,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.insurance.demo.dto.ForgotPasswordRequest;
 import com.insurance.demo.dto.LoginRequest;
 import com.insurance.demo.dto.LoginResponse;
 import com.insurance.demo.dto.RegisterRequest;
+import com.insurance.demo.dto.ResetPasswordRequest;
 import com.insurance.demo.dto.UserResponse;
+import com.insurance.demo.dto.VerifyForgotPasswordOtpRequest;
 import com.insurance.demo.dto.VerifyOtpRequest;
 import com.insurance.demo.service.AuthService;
+import com.insurance.demo.service.PasswordResetService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,17 +28,18 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Registration, OTP verification and login")
+@Tag(name = "Authentication", description = "Registration, OTP verification, login and password reset")
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;  // NEW
+
+    // ── Existing Endpoints ─────────────────────────────────────────────────
 
     @PostMapping("/register")
     @Operation(
         summary = "Register a new customer account",
-        description = "Creates an inactive account. The 'verificationChannel' field decides " +
-                      "where the OTP is sent — 'email' sends to inbox, 'phone' sends via SMS (Twilio). " +
-                      "Only ONE OTP is generated and sent to the chosen channel."
+        description = "Creates an inactive account. OTP is sent to the chosen channel (email/phone)."
     )
     public ResponseEntity<Map<String, String>> register(
             @Valid @RequestBody RegisterRequest request) {
@@ -45,8 +50,7 @@ public class AuthController {
     @PostMapping("/verify-otp")
     @Operation(
         summary = "Verify OTP to activate account",
-        description = "Submit the OTP received on your chosen channel. " +
-                      "Set 'channel' to 'email' or 'phone' — must match what you chose at registration."
+        description = "Submit the OTP received on your chosen channel to activate your account."
     )
     public ResponseEntity<UserResponse> verifyOtp(
             @Valid @RequestBody VerifyOtpRequest request) {
@@ -61,5 +65,42 @@ public class AuthController {
     public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    // ── NEW: Forgot Password Endpoints ─────────────────────────────────────
+
+    @PostMapping("/forgot-password")
+    @Operation(
+        summary = "Step 1 – Send password reset OTP",
+        description = "Registered email par 6-digit OTP bhejta hai. " +
+                      "Email exist nahi karta to 404 milega."
+    )
+    public ResponseEntity<Map<String, String>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        String message = passwordResetService.sendForgotPasswordOtp(request);
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
+    @PostMapping("/verify-forgot-password-otp")
+    @Operation(
+        summary = "Step 2 – Verify password reset OTP",
+        description = "OTP verify karo. Successful hone par Step 3 ke liye aage badho."
+    )
+    public ResponseEntity<Map<String, String>> verifyForgotPasswordOtp(
+            @Valid @RequestBody VerifyForgotPasswordOtpRequest request) {
+        String message = passwordResetService.verifyForgotPasswordOtp(request);
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(
+        summary = "Step 3 – Reset password",
+        description = "OTP verified hone ke baad naya password set karo. " +
+                      "Same email aur OTP bhejni hai jo Step 2 me use ki thi."
+    )
+    public ResponseEntity<Map<String, String>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        String message = passwordResetService.resetPassword(request);
+        return ResponseEntity.ok(Map.of("message", message));
     }
 }

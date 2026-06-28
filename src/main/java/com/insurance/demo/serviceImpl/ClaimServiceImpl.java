@@ -20,6 +20,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 
@@ -56,11 +58,32 @@ public class ClaimServiceImpl implements ClaimService {
             throw new UnauthorizedAccessException("You are not authorized to raise a claim on this policy");
         }
 
+        // Auto-lapse check: check if past nextPaymentDueDate by > 30 days
+        if (policy.getStatus() == PolicyStatus.ACTIVE && policy.getNextPaymentDueDate() != null) {
+            if (LocalDate.now().isAfter(policy.getNextPaymentDueDate().plusDays(30))) {
+                policy.setStatus(PolicyStatus.LAPSED);
+                policyRepository.save(policy);
+                log.info("Policy status automatically updated to LAPSED: policyId={}", policy.getPolicyId());
+            }
+        }
+
         // Policy must be ACTIVE
         if (policy.getStatus() != PolicyStatus.ACTIVE) {
             log.warn("Claim rejected - policy is not active: policyId={}, status={}", policy.getPolicyId(), policy.getStatus());
             throw new InvalidPolicyStatusException(
                     "Claims can only be raised on ACTIVE policies. Policy status: " + policy.getStatus());
+        }
+
+        // Incident date validation against policy coverage period
+        if (request.getIncidentDate().isBefore(policy.getStartDate()) || 
+            request.getIncidentDate().isAfter(policy.getEndDate())) {
+            throw new BadRequestException("Incident date must fall within the policy coverage period (" + 
+                policy.getStartDate() + " to " + policy.getEndDate() + ")");
+        }
+
+        // Incident date validation against initial activation/payment date
+        if (policy.getLastPaymentDate() != null && request.getIncidentDate().isBefore(policy.getLastPaymentDate())) {
+            throw new BadRequestException("Incident date cannot be prior to the policy payment/activation date");
         }
 
         // Claim amount must not exceed coverage
@@ -83,6 +106,40 @@ public class ClaimServiceImpl implements ClaimService {
             throw new BadRequestException("At least one claim document must be submitted");
         }
 
+        // Real-world Suspicious claim logic
+        boolean suspicious = false;
+        if (policy.getLastPaymentDate() != null) {
+            long daysBetween = ChronoUnit.DAYS.between(policy.getLastPaymentDate(), LocalDate.now());
+            if (daysBetween <= 15) {
+                suspicious = true;
+                log.info("Claim flagged as SUSPICIOUS: raised within {} days of last payment", daysBetween);
+            }
+        }
+
+        // Compute Fraud Risk Score
+        int riskScore = 0;
+        if (suspicious) {
+            riskScore += 40;
+        }
+        if (request.getClaimAmount() > (policy.getPlan().getCoverageAmount() * 0.8)) {
+            riskScore += 30;
+            log.info("Fraud Risk Score: +30 points because claim amount {} exceeds 80% of coverage {}", 
+                    request.getClaimAmount(), policy.getPlan().getCoverageAmount());
+        }
+        List<Claim> customerClaims = claimRepository.findByPolicyCustomerCustomerId(customer.getCustomerId());
+        boolean hasPriorRejected = customerClaims.stream().anyMatch(c -> c.getStatus() == ClaimStatus.REJECTED);
+        if (hasPriorRejected) {
+            riskScore += 30;
+            log.info("Fraud Risk Score: +30 points because customer has prior rejected claims");
+        }
+
+        String riskLevel = "LOW";
+        if (riskScore >= 70) {
+            riskLevel = "HIGH";
+        } else if (riskScore >= 40) {
+            riskLevel = "MEDIUM";
+        }
+
         Claim claim = Claim.builder()
                 .claimNumber(NumberGenerator.generateClaimNumber())
                 .policy(policy)
@@ -90,6 +147,9 @@ public class ClaimServiceImpl implements ClaimService {
                 .claimReason(request.getClaimReason())
                 .incidentDate(request.getIncidentDate())
                 .status(ClaimStatus.SUBMITTED)
+                .suspicious(suspicious)
+                .fraudRiskScore(riskScore)
+                .fraudRiskLevel(riskLevel)
                 .build();
 
         claim = claimRepository.save(claim);
@@ -115,6 +175,16 @@ public class ClaimServiceImpl implements ClaimService {
 
         Claim claim = findClaim(claimId);
         User agent = findUser(agentUserId);
+
+        // Suspicious claim restriction
+        if (claim.isSuspicious()) {
+            if (claim.getAssignedAgent() == null) {
+                throw new BadRequestException("This suspicious claim must be assigned to an agent by Admin first.");
+            }
+            if (!claim.getAssignedAgent().getId().equals(agentUserId)) {
+                throw new UnauthorizedAccessException("Only the assigned agent can review this suspicious claim.");
+            }
+        }
 
         ClaimStatus targetStatus = parseStatus(request.getTargetStatus());
 
@@ -308,6 +378,27 @@ public class ClaimServiceImpl implements ClaimService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public ClaimResponse assignAgent(Long claimId, Long agentId) {
+        log.info("Admin assigning agentId={} to claimId={}", agentId, claimId);
+        Claim claim = findClaim(claimId);
+        User agent = findUser(agentId);
+
+        if (agent.getRole() != com.insurance.demo.enums.Role.AGENT) {
+            throw new BadRequestException("User with ID " + agentId + " is not an AGENT");
+        }
+
+        claim.setAssignedAgent(agent);
+        claimRepository.save(claim);
+
+        // Record history
+        saveHistory(claim, claim.getStatus(), claim.getStatus(), "Claim assigned to agent: " + agent.getFullName(), null);
+
+        log.info("Claim {} successfully assigned to agent {}", claimId, agentId);
+        return mapToResponse(claim);
+    }
+
     private ClaimResponse mapToResponse(Claim c) {
         return ClaimResponse.builder()
                 .claimId(c.getClaimId())
@@ -320,6 +411,11 @@ public class ClaimServiceImpl implements ClaimService {
                 .status(c.getStatus().name())
                 .agentRemarks(c.getAgentRemarks())
                 .adminRemarks(c.getAdminRemarks())
+                .suspicious(c.isSuspicious())
+                .assignedAgentId(c.getAssignedAgent() != null ? c.getAssignedAgent().getId() : null)
+                .assignedAgentName(c.getAssignedAgent() != null ? c.getAssignedAgent().getFullName() : null)
+                .fraudRiskScore(c.getFraudRiskScore())
+                .fraudRiskLevel(c.getFraudRiskLevel())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

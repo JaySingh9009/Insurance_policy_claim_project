@@ -79,6 +79,16 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.makeClaimDecision(id, request, principal.getUser().getId()));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/{id}/assign-agent")
+    @Operation(summary = "Admin assigns an agent to a claim (Admin only)")
+    public ResponseEntity<ClaimResponse> assignAgent(
+            @PathVariable Long id,
+            @Valid @RequestBody AssignAgentRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        return ResponseEntity.ok(claimService.assignAgent(id, request.getAgentId()));
+    }
+
 
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @GetMapping

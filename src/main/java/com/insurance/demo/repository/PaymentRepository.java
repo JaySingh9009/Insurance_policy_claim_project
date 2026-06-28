@@ -17,4 +17,6 @@ public interface PaymentRepository extends JpaRepository<PremiumPayment, Long> {
     boolean existsByTransactionReference(String transactionReference);
 
     Optional<PremiumPayment> findByTransactionReference(String transactionReference);
+    
+    Page<PremiumPayment> findByPolicyCustomerUserId(Long userId, Pageable pageable);
 }

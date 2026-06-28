@@ -21,6 +21,11 @@ public class ClaimResponse {
     private String status;
     private String agentRemarks;
     private String adminRemarks;
+    private boolean suspicious;
+    private Long assignedAgentId;
+    private String assignedAgentName;
+    private Integer fraudRiskScore;
+    private String fraudRiskLevel;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

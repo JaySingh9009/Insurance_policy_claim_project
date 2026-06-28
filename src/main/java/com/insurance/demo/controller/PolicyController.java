@@ -37,9 +37,9 @@ public class PolicyController {
                         principal.getUser().getId()));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PreAuthorize("hasRole('AGENT')")
     @PostMapping("/issue")
-    @Operation(summary = "Admin/Agent issues policy to a specific customer")
+    @Operation(summary = "Agent issues policy to a specific customer")
     public ResponseEntity<PolicyResponse> issuePolicy(
             @Valid @RequestBody IssuePolicyRequest request) {
 
@@ -82,7 +82,7 @@ public class PolicyController {
                         sortBy,
                         sortDir));
     }
-    
+
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @GetMapping("/{id}")
     @Operation(summary = "Get policy by ID")
@@ -93,9 +93,15 @@ public class PolicyController {
                 policyService.getPolicyById(id));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    // NOTE: was "hasAnyRole('ADMIN', 'AGENT')" before — that blocked customers
+    // from ever reaching this endpoint, even though PolicyServiceImpl has
+    // logic specifically to let a CUSTOMER cancel their own policy (and the
+    // React frontend's "Cancel Policy" button calls this exact endpoint as
+    // a customer). Added CUSTOMER here so that ownership check in the
+    // service layer actually gets a chance to run.
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT', 'CUSTOMER')")
     @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancel a policy (Admin/Agent only)")
+    @Operation(summary = "Cancel a policy (Customer can cancel their own; Admin/Agent can cancel any)")
     public ResponseEntity<PolicyResponse> cancelPolicy(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails principal) {

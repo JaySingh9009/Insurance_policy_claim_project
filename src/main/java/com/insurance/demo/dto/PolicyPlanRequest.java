@@ -32,8 +32,8 @@ public class PolicyPlanRequest {
 
     @NotBlank(message = "Premium type is required")
     @Pattern(
-        regexp = "(?i)ONE_TIME|ANNUAL",
-        message = "Premium type must be ONE_TIME or ANNUAL"
+        regexp = "(?i)ONE_TIME|MONTHLY|QUARTERLY|SEMI_ANNUAL|ANNUAL",
+        message = "Premium type must be ONE_TIME, MONTHLY, QUARTERLY, SEMI_ANNUAL, or ANNUAL"
     )
     private String premiumType;
 
