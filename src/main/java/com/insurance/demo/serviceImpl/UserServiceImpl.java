@@ -57,13 +57,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public PagedResponse<UserResponse> getAllUsers(int page, int size, String sortBy, String sortDir) {
+    public PagedResponse<UserResponse> getAllUsers(int page, int size, String sortBy, String sortDir, Role role) {
         PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
         Sort sort = "desc".equalsIgnoreCase(sortDir)
                 ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<User> userPage = userRepository.findAll(pageable);
+        Page<User> userPage = (role != null)
+                ? userRepository.findByRole(role, pageable)
+                : userRepository.findAll(pageable);
         List<UserResponse> records = userPage.getContent().stream().map(this::mapToResponse).toList();
 
         return PagedResponse.<UserResponse>builder()
