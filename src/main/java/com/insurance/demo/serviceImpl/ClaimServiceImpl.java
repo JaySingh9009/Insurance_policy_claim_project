@@ -86,11 +86,20 @@ public class ClaimServiceImpl implements ClaimService {
             throw new BadRequestException("Incident date cannot be prior to the policy payment/activation date");
         }
 
-        // Claim amount must not exceed coverage
-        if (request.getClaimAmount() > policy.getPlan().getCoverageAmount()) {
-            log.warn("Claim amount {} exceeds coverage {}", request.getClaimAmount(), policy.getPlan().getCoverageAmount());
+        // Claim amount must not exceed coverage (including all previous claims on this policy)
+        List<Claim> policyClaims = claimRepository.findByPolicyPolicyId(policy.getPolicyId());
+        double totalPreviousClaimed = policyClaims.stream()
+                .filter(c -> c.getStatus() != ClaimStatus.REJECTED)
+                .mapToDouble(Claim::getClaimAmount)
+                .sum();
+
+        if (totalPreviousClaimed + request.getClaimAmount() > policy.getPlan().getCoverageAmount()) {
+            double remainingCoverage = Math.max(0.0, policy.getPlan().getCoverageAmount() - totalPreviousClaimed);
+            log.warn("Total claimed amount ({}) + new claim ({}) exceeds policy coverage ({})", 
+                    totalPreviousClaimed, request.getClaimAmount(), policy.getPlan().getCoverageAmount());
             throw new ClaimAmountExceededException(
-                    "Claim amount (" + request.getClaimAmount() + ") exceeds plan coverage (" + policy.getPlan().getCoverageAmount() + ")");
+                    "Total claimed amount would exceed the policy coverage limit. Remaining coverage: " + remainingCoverage + 
+                    " (Coverage: " + policy.getPlan().getCoverageAmount() + ", Previously claimed: " + totalPreviousClaimed + ")");
         }
 
         // Cannot raise a second active claim (enhancement per spec)

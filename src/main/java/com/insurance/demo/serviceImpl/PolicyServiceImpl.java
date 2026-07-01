@@ -274,6 +274,7 @@ public class PolicyServiceImpl implements PolicyService {
 				.customerName(p.getCustomer().getUser().getFullName())
 				.planId(p.getPlan().getPlanId())
 				.planName(p.getPlan().getPlanName())
+				.premiumAmount(p.getPlan().getPremiumAmount())
 				.startDate(p.getStartDate())
 				.endDate(p.getEndDate())
 				.status(p.getStatus().name())

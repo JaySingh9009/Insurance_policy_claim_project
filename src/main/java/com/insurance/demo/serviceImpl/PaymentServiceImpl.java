@@ -152,14 +152,18 @@ public class PaymentServiceImpl implements PaymentService {
                     }
 
                     switch (premiumType) {
-                        case MONTHLY ->
-                                policy.setNextPaymentDueDate(nextDue.plusMonths(1));
-                        case QUARTERLY ->
-                                policy.setNextPaymentDueDate(nextDue.plusMonths(3));
-                        case SEMI_ANNUAL ->
-                                policy.setNextPaymentDueDate(nextDue.plusMonths(6));
-                        case ANNUAL ->
-                                policy.setNextPaymentDueDate(nextDue.plusYears(1));
+                        case MONTHLY:
+                            policy.setNextPaymentDueDate(nextDue.plusMonths(1));
+                            break;
+                        case QUARTERLY:
+                            policy.setNextPaymentDueDate(nextDue.plusMonths(3));
+                            break;
+                        case SEMI_ANNUAL:
+                            policy.setNextPaymentDueDate(nextDue.plusMonths(6));
+                            break;
+                        case ANNUAL:
+                            policy.setNextPaymentDueDate(nextDue.plusYears(1));
+                            break;
                     }
                 }
             }
