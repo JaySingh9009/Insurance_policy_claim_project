@@ -1,0 +1,116 @@
+package com.insurance.demo.serviceImpl;
+
+import com.insurance.demo.dto.CreateAgentRequest;
+import com.insurance.demo.dto.PagedResponse;
+import com.insurance.demo.dto.UserResponse;
+import com.insurance.demo.entity.User;
+import com.insurance.demo.enums.Role;
+import com.insurance.demo.exception.BadRequestException;
+import com.insurance.demo.exception.DuplicateEmailException;
+import com.insurance.demo.exception.ResourceNotFoundException;
+import com.insurance.demo.repository.UserRepository;
+import com.insurance.demo.service.UserService;
+import com.insurance.demo.util.PaginationValidator;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Set;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class UserServiceImpl implements UserService {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("fullName", "email", "createdAt", "role");
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    @Override
+    public UserResponse createAgent(CreateAgentRequest request) {
+        log.info("Admin creating agent: {}", request.getEmail());
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            log.warn("Agent creation failed - email exists: {}", request.getEmail());
+            throw new DuplicateEmailException("Email already in use: " + request.getEmail());
+        }
+
+        User agent = User.builder()
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .mobileNumber(request.getMobileNumber())
+                .role(Role.AGENT)
+                .active(true)
+                .build();
+
+        agent = userRepository.save(agent);
+        log.info("Agent created: userId={}", agent.getId());
+        return mapToResponse(agent);
+    }
+
+    @Override
+    public PagedResponse<UserResponse> getAllUsers(int page, int size, String sortBy, String sortDir) {
+        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
+        Sort sort = "desc".equalsIgnoreCase(sortDir)
+                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<User> userPage = userRepository.findAll(pageable);
+        List<UserResponse> records = userPage.getContent().stream().map(this::mapToResponse).toList();
+
+        return PagedResponse.<UserResponse>builder()
+                .records(records)
+                .currentPage(userPage.getNumber())
+                .pageSize(userPage.getSize())
+                .totalRecords(userPage.getTotalElements())
+                .totalPages(userPage.getTotalPages())
+                .isLastPage(userPage.isLast())
+                .build();
+    }
+
+    @Override
+    public UserResponse activateUser(Long id) {
+        User user = findUser(id);
+        if (user.isActive()) {
+            log.warn("User {} is already active", id);
+        }
+        user.setActive(true);
+        userRepository.save(user);
+        log.info("User {} activated", id);
+        return mapToResponse(user);
+    }
+
+    @Override
+    public UserResponse deactivateUser(Long id, Long requestingUserId) {
+        if (id.equals(requestingUserId)) {
+            throw new BadRequestException("You cannot deactivate your own account");
+        }
+        User user = findUser(id);
+        user.setActive(false);
+        userRepository.save(user);
+        log.info("User {} deactivated by admin {}", id, requestingUserId);
+        return mapToResponse(user);
+    }
+
+    @Override
+    public UserResponse getUserById(Long id) {
+        return mapToResponse(findUser(id));
+    }
+
+    private User findUser(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+    }
+
+    private UserResponse mapToResponse(User u) {
+        return new UserResponse(u.getId(), u.getFullName(), u.getEmail(), u.getMobileNumber(), u.getRole(), u.isActive());
+    }
+}
