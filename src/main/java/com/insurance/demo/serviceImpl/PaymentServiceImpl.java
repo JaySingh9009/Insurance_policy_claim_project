@@ -216,6 +216,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentId(p.getPaymentId())
                 .policyId(p.getPolicy().getPolicyId())
                 .policyNumber(p.getPolicy().getPolicyNumber())
+                .customerName(p.getPolicy().getCustomer() != null && p.getPolicy().getCustomer().getUser() != null ? p.getPolicy().getCustomer().getUser().getFullName() : null)
                 .amount(p.getAmount())
                 .paymentMode(p.getPaymentMethod().name())
                 .transactionReference(p.getTransactionReference())
