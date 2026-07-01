@@ -30,15 +30,21 @@ public class PolicyController {
     public ResponseEntity<PolicyResponse> purchasePolicy(
             @Valid @RequestBody PurchasePolicyRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(policyService.purchasePolicy(request, principal.getUser().getId()));
+                .body(policyService.purchasePolicy(
+                        request,
+                        principal.getUser().getId()));
     }
 
     @PreAuthorize("hasRole('AGENT')")
     @PostMapping("/issue")
     @Operation(summary = "Agent issues policy to a specific customer")
-    public ResponseEntity<PolicyResponse> issuePolicy(@Valid @RequestBody IssuePolicyRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(policyService.issuePolicy(request));
+    public ResponseEntity<PolicyResponse> issuePolicy(
+            @Valid @RequestBody IssuePolicyRequest request) {
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(policyService.issuePolicy(request));
     }
 
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -50,8 +56,14 @@ public class PolicyController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
-        return ResponseEntity.ok(policyService.getMyPolicies(
-                principal.getUser().getId(), page, size, sortBy, sortDir));
+
+        return ResponseEntity.ok(
+                policyService.getMyPolicies(
+                        principal.getUser().getId(),
+                        page,
+                        size,
+                        sortBy,
+                        sortDir));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
@@ -62,23 +74,44 @@ public class PolicyController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
-        return ResponseEntity.ok(policyService.getAllPolicies(page, size, sortBy, sortDir));
-    }
-    
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
-    @GetMapping("/{id}")
-    @Operation(summary = "Get policy by ID")
-    public ResponseEntity<PolicyResponse> getPolicyById(@PathVariable Long id) {
-        return ResponseEntity.ok(policyService.getPolicyById(id));
+
+        return ResponseEntity.ok(
+                policyService.getAllPolicies(
+                        page,
+                        size,
+                        sortBy,
+                        sortDir));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @GetMapping("/{id}")
+    @Operation(summary = "Get policy by ID")
+    public ResponseEntity<PolicyResponse> getPolicyById(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                policyService.getPolicyById(id));
+    }
+
+    // NOTE: was "hasAnyRole('ADMIN', 'AGENT')" before — that blocked customers
+    // from ever reaching this endpoint, even though PolicyServiceImpl has
+    // logic specifically to let a CUSTOMER cancel their own policy (and the
+    // React frontend's "Cancel Policy" button calls this exact endpoint as
+    // a customer). Added CUSTOMER here so that ownership check in the
+    // service layer actually gets a chance to run.
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT', 'CUSTOMER')")
     @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancel a policy (Admin/Agent only)")
+    @Operation(summary = "Cancel a policy (Customer can cancel their own; Admin/Agent can cancel any)")
     public ResponseEntity<PolicyResponse> cancelPolicy(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails principal) {
+
         String role = principal.getUser().getRole().name();
-        return ResponseEntity.ok(policyService.cancelPolicy(id, principal.getUser().getId(), role));
+
+        return ResponseEntity.ok(
+                policyService.cancelPolicy(
+                        id,
+                        principal.getUser().getId(),
+                        role));
     }
 }

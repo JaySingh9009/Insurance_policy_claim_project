@@ -29,8 +29,11 @@ public class CustomerController {
     public ResponseEntity<CustomerResponse> createProfile(
             @Valid @RequestBody CustomerRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(customerService.createProfile(request, principal.getUser().getId()));
+                .body(customerService.createProfile(
+                        request,
+                        principal.getUser().getId()));
     }
 
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -39,7 +42,11 @@ public class CustomerController {
     public ResponseEntity<CustomerResponse> updateProfile(
             @Valid @RequestBody CustomerRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
-        return ResponseEntity.ok(customerService.updateProfile(request, principal.getUser().getId()));
+
+        return ResponseEntity.ok(
+                customerService.updateProfile(
+                        request,
+                        principal.getUser().getId()));
     }
 
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -47,7 +54,10 @@ public class CustomerController {
     @Operation(summary = "Get my customer profile (Customer only)")
     public ResponseEntity<CustomerResponse> getMyProfile(
             @AuthenticationPrincipal CustomUserDetails principal) {
-        return ResponseEntity.ok(customerService.getMyProfile(principal.getUser().getId()));
+
+        return ResponseEntity.ok(
+                customerService.getMyProfile(
+                        principal.getUser().getId()));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
@@ -58,13 +68,22 @@ public class CustomerController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
-        return ResponseEntity.ok(customerService.getAllCustomers(page, size, sortBy, sortDir));
+
+        return ResponseEntity.ok(
+                customerService.getAllCustomers(
+                        page,
+                        size,
+                        sortBy,
+                        sortDir));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @GetMapping("/{id}")
     @Operation(summary = "Get customer by ID (Admin/Agent)")
-    public ResponseEntity<CustomerResponse> getCustomerById(@PathVariable Long id) {
-        return ResponseEntity.ok(customerService.getCustomerById(id));
+    public ResponseEntity<CustomerResponse> getCustomerById(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                customerService.getCustomerById(id));
     }
 }

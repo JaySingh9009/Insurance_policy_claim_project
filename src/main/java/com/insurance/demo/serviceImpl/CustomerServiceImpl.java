@@ -26,26 +26,30 @@ import com.insurance.demo.util.PaginationValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class CustomerServiceImpl implements CustomerService {
 
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("createdAt", "city", "state");
+    private static final Set<String> ALLOWED_SORT_FIELDS =
+            Set.of("createdAt", "city", "state");
 
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
 
     @Override
-    public CustomerResponse createProfile(CustomerRequest request, Long userId) {
+    public CustomerResponse createProfile(
+            CustomerRequest request,
+            Long userId) {
+
         log.info("Creating customer profile for userId={}", userId);
 
         User user = findUser(userId);
 
-        // One user → one profile only
         if (customerRepository.findByUser_Id(userId).isPresent()) {
-            log.warn("Customer profile already exists for userId={}", userId);
-            throw new BadRequestException("Customer profile already exists for this account");
+            throw new BadRequestException(
+                    "Customer profile already exists for this account");
         }
         if (request.getNomineeName() != null && request.getNomineeName().equalsIgnoreCase(user.getFullName())) {
             throw new BadRequestException("Nominee name cannot be identical to the customer's own name");
@@ -73,12 +77,19 @@ public class CustomerServiceImpl implements CustomerService {
                 .build();
 
         customer = customerRepository.save(customer);
-        log.info("Customer profile created: customerId={}", customer.getCustomerId());
+
+        log.info(
+                "Customer profile created successfully. customerId={}",
+                customer.getCustomerId());
+
         return mapToResponse(customer);
     }
 
     @Override
-    public CustomerResponse updateProfile(CustomerRequest request, Long userId) {
+    public CustomerResponse updateProfile(
+            CustomerRequest request,
+            Long userId) {
+
         log.info("Updating customer profile for userId={}", userId);
         
  
@@ -94,7 +105,9 @@ public class CustomerServiceImpl implements CustomerService {
      }
 
         Customer customer = customerRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for this account"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer profile not found"));
 
         if (request.getNomineeName() != null && request.getNomineeName().equalsIgnoreCase(customer.getUser().getFullName())) {
             throw new BadRequestException("Nominee name cannot be identical to the customer's own name");
@@ -109,26 +122,49 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setNomineeRelation(request.getNomineeRelation());
 
         customer = customerRepository.save(customer);
-        log.info("Customer profile updated: customerId={}", customer.getCustomerId());
+
         return mapToResponse(customer);
     }
 
     @Override
     public CustomerResponse getMyProfile(Long userId) {
+
         Customer customer = customerRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for this account"));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer profile not found"));
+
         return mapToResponse(customer);
     }
 
     @Override
-    public PagedResponse<CustomerResponse> getAllCustomers(int page, int size, String sortBy, String sortDir) {
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-        Sort sort = "desc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-        Pageable pageable = PageRequest.of(page, size, sort);
+    public PagedResponse<CustomerResponse> getAllCustomers(
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
 
-        Page<Customer> customerPage = customerRepository.findAll(pageable);
-        List<CustomerResponse> records = customerPage.getContent().stream().map(this::mapToResponse).toList();
+        PaginationValidator.validate(
+                page,
+                size,
+                sortBy,
+                ALLOWED_SORT_FIELDS);
+
+        Sort sort = "desc".equalsIgnoreCase(sortDir)
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable =
+                PageRequest.of(page, size, sort);
+
+        Page<Customer> customerPage =
+                customerRepository.findAll(pageable);
+
+        List<CustomerResponse> records =
+                customerPage.getContent()
+                        .stream()
+                        .map(this::mapToResponse)
+                        .toList();
 
         return PagedResponse.<CustomerResponse>builder()
                 .records(records)
@@ -142,30 +178,41 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public CustomerResponse getCustomerById(Long customerId) {
+
         Customer customer = customerRepository.findById(customerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + customerId));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer not found with ID: "
+                                        + customerId));
+
         return mapToResponse(customer);
     }
 
     private User findUser(Long userId) {
+
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found with ID: "
+                                        + userId));
     }
 
-    private CustomerResponse mapToResponse(Customer c) {
+    private CustomerResponse mapToResponse(Customer customer) {
+
         return CustomerResponse.builder()
-                .customerId(c.getCustomerId())
-                .fullName(c.getUser().getFullName())
-                .email(c.getUser().getEmail())
-                .mobileNumber(c.getUser().getMobileNumber())
-                .dateOfBirth(c.getDateOfBirth())
-                .address(c.getAddress())
-                .city(c.getCity())
-                .state(c.getState())
-                .pincode(c.getPincode())
-                .nomineeName(c.getNomineeName())
-                .nomineeRelation(c.getNomineeRelation())
-                .createdAt(c.getCreatedAt())
+                .customerId(customer.getCustomerId())
+                .fullName(customer.getUser().getFullName())
+                .email(customer.getUser().getEmail())
+                .mobileNumber(customer.getUser().getMobileNumber())
+                .dateOfBirth(customer.getDateOfBirth())
+                .address(customer.getAddress())
+                .city(customer.getCity())
+                .state(customer.getState())
+                .pincode(customer.getPincode())
+                .nomineeName(customer.getNomineeName())
+                .nomineeRelation(customer.getNomineeRelation())
+                .createdAt(customer.getCreatedAt())
+                .updatedAt(customer.getUpdatedAt())
                 .build();
     }
 }
