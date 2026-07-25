@@ -12,7 +12,7 @@ import com.insurance.demo.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/dashboard")
+    @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
 public class DashboardController {
 

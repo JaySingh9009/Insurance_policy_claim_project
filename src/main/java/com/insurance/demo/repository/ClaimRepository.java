@@ -21,4 +21,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
     Page<Claim> findByPolicyCustomerCustomerId(Long customerId, Pageable pageable);
 
     boolean existsByPolicyPolicyIdAndStatusNotIn(Long policyId, List<ClaimStatus> statuses);
+
+
 }

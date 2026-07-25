@@ -16,7 +16,7 @@ public class CustomUserDetails implements UserDetails {
         this.user = user;
     }
 
-    /** Expose the underlying User entity for controllers that need userId/role */
+
     public User getUser() {
         return user;
     }

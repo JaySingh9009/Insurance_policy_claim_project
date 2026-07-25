@@ -17,5 +17,7 @@ public class IssuePolicyRequest {
     @NotNull(message = "Plan ID is required")
     private Long planId;
 
+    private String selectedPremiumType;
+
     private LocalDate startDate;
 }

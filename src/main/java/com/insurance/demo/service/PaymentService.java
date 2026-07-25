@@ -1,11 +1,15 @@
 package com.insurance.demo.service;
 
+import com.insurance.demo.dto.CreateRazorpayOrderRequest;
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PaymentRequest;
 import com.insurance.demo.dto.PaymentResponse;
+import com.insurance.demo.dto.RazorpayOrderResponse;
+import com.insurance.demo.dto.VerifyRazorpayPaymentRequest;
 
 public interface PaymentService {
-    PaymentResponse makePayment(PaymentRequest request, Long userId, String role);
+    RazorpayOrderResponse createRazorpayOrder(CreateRazorpayOrderRequest request, Long userId, String role);
+    PaymentResponse verifyRazorpayPayment(VerifyRazorpayPaymentRequest request, Long userId, String role);
     PagedResponse<PaymentResponse> getPaymentsByPolicy(Long policyId, int page, int size);
     PagedResponse<PaymentResponse> getAllPayments(int page, int size, String sortBy, String sortDir);
     PagedResponse<PaymentResponse> getMyPayments(

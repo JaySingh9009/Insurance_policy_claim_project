@@ -18,6 +18,8 @@ public class PolicyResponse {
     private String planName;
     private Long planId;
     private Double premiumAmount;
+    private String selectedPremiumType;
+    private Double installmentAmount;
     private LocalDate startDate;
     private LocalDate endDate;
     private String status;

@@ -23,7 +23,7 @@ public class DataInitializer
     public void run(String... args)
             throws Exception {
 
-        // ADMIN
+        
         if (!userRepository.existsByEmail(
                 "admin@gmail.com")) {
 
@@ -42,7 +42,7 @@ public class DataInitializer
             userRepository.save(admin);
         }
 
-        // AGENT
+     
         if (!userRepository.existsByEmail(
                 "agent@gmail.com")) {
 

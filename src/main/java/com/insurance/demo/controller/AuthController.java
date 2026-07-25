@@ -32,10 +32,9 @@ import lombok.RequiredArgsConstructor;
 public class AuthController {
 
     private final AuthService authService;
-    private final PasswordResetService passwordResetService;  // NEW
+    private final PasswordResetService passwordResetService;  
 
-    // ── Existing Endpoints ─────────────────────────────────────────────────
-
+ 
     @PostMapping("/register")
     @Operation(
         summary = "Register a new customer account",
@@ -67,7 +66,6 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
-    // ── NEW: Forgot Password Endpoints ─────────────────────────────────────
 
     @PostMapping("/forgot-password")
     @Operation(

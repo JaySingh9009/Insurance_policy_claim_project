@@ -19,7 +19,7 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    // ─── 404 ───────────────────────────────────────────────────────────────────
+
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleNotFound(
@@ -28,7 +28,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", ex.getMessage(), request);
     }
 
-    // ─── 409 ───────────────────────────────────────────────────────────────────
+
 
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ApiErrorResponse> handleDuplicateEmail(
@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "DUPLICATE_RESOURCE", ex.getMessage(), request);
     }
 
-    // ─── 401 ───────────────────────────────────────────────────────────────────
+
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
@@ -83,7 +83,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "You do not have permission to access this resource", request);
     }
 
-    // ─── 400 ───────────────────────────────────────────────────────────────────
+
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiErrorResponse> handleBadRequest(
@@ -154,7 +154,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 
-    // ─── 500 ───────────────────────────────────────────────────────────────────
+
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneral(
@@ -164,7 +164,7 @@ public class GlobalExceptionHandler {
                 "An unexpected error occurred. Please try again later.", request);
     }
 
-    // ─── Helper ────────────────────────────────────────────────────────────────
+
 
     private ResponseEntity<ApiErrorResponse> build(
             HttpStatus status, String errorType, String message, HttpServletRequest request) {

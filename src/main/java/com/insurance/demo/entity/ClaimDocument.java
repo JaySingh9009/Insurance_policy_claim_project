@@ -26,15 +26,12 @@ public class ClaimDocument {
     @Column(nullable = false)
     private String documentName;
 
-    /** e.g. PDF, IMAGE, MEDICAL_REPORT */
     @Column(nullable = false)
     private String documentType;
 
-    /** Cloudinary HTTPS URL — publicly accessible */
     @Column(nullable = false, length = 1000)
     private String documentUrl;
 
-    /** Cloudinary public_id — used for deletion */
     @Column(nullable = false)
     private String publicId;
 

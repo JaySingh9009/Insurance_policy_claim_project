@@ -21,7 +21,6 @@ public class ClaimResponse {
     private String status;
     private String agentRemarks;
     private String adminRemarks;
-    private boolean suspicious;
     private String customerName;
     private Long assignedAgentId;
     private String assignedAgentName;

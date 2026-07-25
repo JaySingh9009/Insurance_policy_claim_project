@@ -46,9 +46,6 @@ public class Claim {
 
     private String adminRemarks;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private boolean suspicious = false;
 
     @ManyToOne
     @JoinColumn(name = "assigned_agent_id")

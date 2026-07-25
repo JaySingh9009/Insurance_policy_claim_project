@@ -80,13 +80,17 @@ public class ClaimController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
-    @PatchMapping("/{id}/assign-agent")
+    @PatchMapping({"/{id}/assign", "/{id}/assign-agent"})
     @Operation(summary = "Admin assigns an agent to a claim (Admin only)")
     public ResponseEntity<ClaimResponse> assignAgent(
             @PathVariable Long id,
-            @Valid @RequestBody AssignAgentRequest request,
-            @AuthenticationPrincipal CustomUserDetails principal) {
-        return ResponseEntity.ok(claimService.assignAgent(id, request.getAgentId()));
+            @RequestParam(required = false) Long agentId,
+            @RequestBody(required = false) AssignAgentRequest request) {
+        Long finalAgentId = (agentId != null) ? agentId : (request != null ? request.getAgentId() : null);
+        if (finalAgentId == null) {
+            throw new com.insurance.demo.exception.BadRequestException("Agent ID must be provided.");
+        }
+        return ResponseEntity.ok(claimService.assignAgent(id, finalAgentId));
     }
 
 
@@ -110,7 +114,7 @@ public class ClaimController {
 
 
     @GetMapping("/{id}/history")
-    @Operation(summary = "Get claim status history (Admin/Agent/Customer for own claim)")
+    @Operation(summary = "Get claim status history (Customer for own claim)")
     public ResponseEntity<PagedResponse<ClaimHistoryResponse>> getClaimHistory(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,

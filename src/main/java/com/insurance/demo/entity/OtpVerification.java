@@ -22,11 +22,11 @@ public class OtpVerification {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // nullable = true (default) — only set when user chooses "email" channel
+
     @Column(nullable = true)
     private String emailOtp;
 
-    // nullable = true (default) — only set when user chooses "phone" channel
+
     @Column(nullable = true)
     private String phoneOtp;
 
