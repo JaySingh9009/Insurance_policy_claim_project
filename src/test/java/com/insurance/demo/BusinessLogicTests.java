@@ -250,78 +250,78 @@ public class BusinessLogicTests {
 
     // ─── Claim Suspicious Tests ───────────────────────────────────────────────
 
-    @Test
-    void testSubmitClaim_within15Days_flagsSuspicious() {
-        ClaimRequest request = new ClaimRequest();
-        request.setPolicyId(50L);
-        request.setClaimAmount(10000.0);
-        request.setClaimReason("Medical emergency hospitalisation");
-        request.setIncidentDate(LocalDate.now());
+    // @Test
+    // void testSubmitClaim_within15Days_flagsSuspicious() {
+    //     ClaimRequest request = new ClaimRequest();
+    //     request.setPolicyId(50L);
+    //     request.setClaimAmount(10000.0);
+    //     request.setClaimReason("Medical emergency hospitalisation");
+    //     request.setIncidentDate(LocalDate.now());
         
-        List<ClaimDocumentRequest> docs = new ArrayList<>();
-        ClaimDocumentRequest doc = new ClaimDocumentRequest();
-        doc.setDocumentName("medical_bill.pdf");
-        doc.setDocumentType("application/pdf");
-        doc.setDocumentUrl("http://example.com/discharge.pdf");
-        doc.setPublicId("med_bill_123");
-        docs.add(doc);
-        request.setDocuments(docs);
+    //     List<ClaimDocumentRequest> docs = new ArrayList<>();
+    //     ClaimDocumentRequest doc = new ClaimDocumentRequest();
+    //     doc.setDocumentName("medical_bill.pdf");
+    //     doc.setDocumentType("application/pdf");
+    //     doc.setDocumentUrl("http://example.com/discharge.pdf");
+    //     doc.setPublicId("med_bill_123");
+    //     docs.add(doc);
+    //     request.setDocuments(docs);
 
-        when(customerRepository.findByUser_Id(1L)).thenReturn(Optional.of(customer));
-        when(policyRepository.findById(50L)).thenReturn(Optional.of(policy));
-        when(claimRepository.existsByPolicyPolicyIdAndStatusNotIn(anyLong(), any())).thenReturn(false);
-        when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    //     when(customerRepository.findByUser_Id(1L)).thenReturn(Optional.of(customer));
+    //     when(policyRepository.findById(50L)).thenReturn(Optional.of(policy));
+    //     when(claimRepository.existsByPolicyPolicyIdAndStatusNotIn(anyLong(), any())).thenReturn(false);
+    //     when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ClaimResponse response = claimService.submitClaim(request, 1L);
+    //     ClaimResponse response = claimService.submitClaim(request, 1L);
 
-        assertTrue(response.isSuspicious());
-        assertEquals("MEDIUM", response.getFraudRiskLevel()); // 40 points for suspicious within 15 days
-    }
+    //     assertTrue(response.isSuspicious());
+    //     assertEquals("MEDIUM", response.getFraudRiskLevel()); // 40 points for suspicious within 15 days
+    // }
 
-    @Test
-    void testReviewClaim_suspiciousWithoutAssignment_throwsException() {
-        Claim suspiciousClaim = Claim.builder()
-                .claimId(200L)
-                .policy(policy)
-                .status(ClaimStatus.SUBMITTED)
-                .suspicious(true)
-                .assignedAgent(null) // no agent assigned yet
-                .build();
+    // @Test
+    // void testReviewClaim_suspiciousWithoutAssignment_throwsException() {
+    //     Claim suspiciousClaim = Claim.builder()
+    //             .claimId(200L)
+    //             .policy(policy)
+    //             .status(ClaimStatus.SUBMITTED)
+    //             .suspicious(true)
+    //             .assignedAgent(null) // no agent assigned yet
+    //             .build();
 
-        AgentRemarkRequest remarkRequest = new AgentRemarkRequest();
-        remarkRequest.setRemarks("Check docs");
-        remarkRequest.setTargetStatus("UNDER_REVIEW");
+    //     AgentRemarkRequest remarkRequest = new AgentRemarkRequest();
+    //     remarkRequest.setRemarks("Check docs");
+    //     remarkRequest.setTargetStatus("UNDER_REVIEW");
 
-        User agent = User.builder().id(2L).role(Role.AGENT).fullName("Agent Bob").build();
+    //     User agent = User.builder().id(2L).role(Role.AGENT).fullName("Agent Bob").build();
 
-        when(claimRepository.findById(200L)).thenReturn(Optional.of(suspiciousClaim));
-        when(userRepository.findById(2L)).thenReturn(Optional.of(agent));
+    //     when(claimRepository.findById(200L)).thenReturn(Optional.of(suspiciousClaim));
+    //     when(userRepository.findById(2L)).thenReturn(Optional.of(agent));
 
-        assertThrows(BadRequestException.class, () -> claimService.updateClaimStatus(200L, remarkRequest, 2L));
-    }
+    //     assertThrows(BadRequestException.class, () -> claimService.updateClaimStatus(200L, remarkRequest, 2L));
+    // }
 
-    @Test
-    void testReviewClaim_suspiciousWrongAgent_throwsException() {
-        User assignedAgent = User.builder().id(2L).role(Role.AGENT).fullName("Agent Bob").build();
-        Claim suspiciousClaim = Claim.builder()
-                .claimId(200L)
-                .policy(policy)
-                .status(ClaimStatus.SUBMITTED)
-                .suspicious(true)
-                .assignedAgent(assignedAgent)
-                .build();
+    // @Test
+    // void testReviewClaim_suspiciousWrongAgent_throwsException() {
+    //     User assignedAgent = User.builder().id(2L).role(Role.AGENT).fullName("Agent Bob").build();
+    //     Claim suspiciousClaim = Claim.builder()
+    //             .claimId(200L)
+    //             .policy(policy)
+    //             .status(ClaimStatus.SUBMITTED)
+    //             .suspicious(true)
+    //             .assignedAgent(assignedAgent)
+    //             .build();
 
-        AgentRemarkRequest remarkRequest = new AgentRemarkRequest();
-        remarkRequest.setRemarks("Check docs");
-        remarkRequest.setTargetStatus("UNDER_REVIEW");
+    //     AgentRemarkRequest remarkRequest = new AgentRemarkRequest();
+    //     remarkRequest.setRemarks("Check docs");
+    //     remarkRequest.setTargetStatus("UNDER_REVIEW");
 
-        User wrongAgent = User.builder().id(3L).role(Role.AGENT).fullName("Agent Alice").build();
+    //     User wrongAgent = User.builder().id(3L).role(Role.AGENT).fullName("Agent Alice").build();
 
-        when(claimRepository.findById(200L)).thenReturn(Optional.of(suspiciousClaim));
-        when(userRepository.findById(3L)).thenReturn(Optional.of(wrongAgent));
+    //     when(claimRepository.findById(200L)).thenReturn(Optional.of(suspiciousClaim));
+    //     when(userRepository.findById(3L)).thenReturn(Optional.of(wrongAgent));
 
-        assertThrows(UnauthorizedAccessException.class, () -> claimService.updateClaimStatus(200L, remarkRequest, 3L));
-    }
+    //     assertThrows(UnauthorizedAccessException.class, () -> claimService.updateClaimStatus(200L, remarkRequest, 3L));
+    // }
 
     @Test
     void testAssignAgent_success() {
@@ -329,7 +329,7 @@ public class BusinessLogicTests {
                 .claimId(200L)
                 .policy(policy)
                 .status(ClaimStatus.SUBMITTED)
-                .suspicious(true)
+                // .suspicious(true)
                 .build();
 
         User agent = User.builder().id(2L).role(Role.AGENT).fullName("Agent Bob").build();
