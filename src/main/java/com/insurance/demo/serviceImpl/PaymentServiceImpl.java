@@ -245,6 +245,6 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Razorpay Payment VERIFIED & SUCCESS: {} for policy {} (Status: ACTIVE, Next Due: {})",
                 request.getRazorpayPaymentId(), policy.getPolicyNumber(), nextDue);
 
-        return mapToResponse(payment);
+         return mapToResponse(payment);
     }
 }
