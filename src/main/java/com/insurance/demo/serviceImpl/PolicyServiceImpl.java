@@ -64,10 +64,21 @@ public class PolicyServiceImpl implements PolicyService {
 			throw new BadRequestException("Start date cannot be in the past");
 		}
 
+		com.insurance.demo.enums.PremiumType selectedType = plan.getPremiumType();
+		if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
+			try {
+				selectedType = com.insurance.demo.enums.PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
+			} catch (IllegalArgumentException ignored) {}
+		}
+
+		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType);
+
 		Policy policy = Policy.builder()
 				.policyNumber(NumberGenerator.generatePolicyNumber())
 				.customer(customer)
 				.plan(plan)
+				.selectedPremiumType(selectedType)
+				.installmentAmount(installment)
 				.startDate(startDate)
 				.endDate(startDate.plusYears(plan.getDurationInYears()))
 				.status(PolicyStatus.PENDING_PAYMENT) // always starts as PENDING_PAYMENT
@@ -77,7 +88,7 @@ public class PolicyServiceImpl implements PolicyService {
 
 		policy = policyRepository.save(policy);
 
-		log.info("Policy purchased: policyId={}, policyNumber={}", policy.getPolicyId(), policy.getPolicyNumber());
+		log.info("Policy purchased: policyId={}, policyNumber={}, selectedType={}", policy.getPolicyId(), policy.getPolicyNumber(), selectedType);
 
 		return mapToResponse(policy);
 	}
@@ -97,10 +108,21 @@ public class PolicyServiceImpl implements PolicyService {
 
 		LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
 
+		com.insurance.demo.enums.PremiumType selectedType = plan.getPremiumType();
+		if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
+			try {
+				selectedType = com.insurance.demo.enums.PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
+			} catch (IllegalArgumentException ignored) {}
+		}
+
+		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType);
+
 		Policy policy = Policy.builder()
 				.policyNumber(NumberGenerator.generatePolicyNumber())
 				.customer(customer)
 				.plan(plan)
+				.selectedPremiumType(selectedType)
+				.installmentAmount(installment)
 				.startDate(startDate)
 				.endDate(startDate.plusYears(plan.getDurationInYears()))
 				.status(PolicyStatus.PENDING_PAYMENT)
@@ -248,17 +270,32 @@ public class PolicyServiceImpl implements PolicyService {
 		}
 	}
 
+	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, com.insurance.demo.enums.PremiumType type) {
+		if (totalAnnualPremium == null) return 0.0;
+		if (type == com.insurance.demo.enums.PremiumType.MONTHLY) {
+			return Math.round((totalAnnualPremium / 12.0) * 100.0) / 100.0;
+		} else if (type == com.insurance.demo.enums.PremiumType.QUARTERLY) {
+			return Math.round((totalAnnualPremium / 4.0) * 100.0) / 100.0;
+		} else if (type == com.insurance.demo.enums.PremiumType.SEMI_ANNUAL) {
+			return Math.round((totalAnnualPremium / 2.0) * 100.0) / 100.0;
+		} else if (type == com.insurance.demo.enums.PremiumType.ONE_TIME) {
+			int duration = (plan != null && plan.getDurationInYears() > 0) ? plan.getDurationInYears() : 1;
+			return Math.round((totalAnnualPremium * duration) * 100.0) / 100.0;
+		}
+		return totalAnnualPremium;
+	}
+
 	/**
-	 * If an ACTIVE policy's next payment is more than 30 days overdue,
-	 * automatically flips it to LAPSED. Called whenever a policy is mapped
-	 * to a response, so the status shown to the user is always current.
+	 * If an ACTIVE policy's next payment is overdue beyond the Grace Period
+	 * (15 days for MONTHLY, 30 days for others), automatically flips status to LAPSED.
 	 */
 	private void checkAndSetLapsed(Policy p) {
 		if (p.getStatus() == PolicyStatus.ACTIVE && p.getNextPaymentDueDate() != null) {
-			if (LocalDate.now().isAfter(p.getNextPaymentDueDate().plusDays(30))) {
+			int graceDays = (p.getSelectedPremiumType() == com.insurance.demo.enums.PremiumType.MONTHLY) ? 15 : 30;
+			if (LocalDate.now().isAfter(p.getNextPaymentDueDate().plusDays(graceDays))) {
 				p.setStatus(PolicyStatus.LAPSED);
 				policyRepository.save(p);
-				log.info("Policy ID {} status updated to LAPSED due to overdue payment", p.getPolicyId());
+				log.info("Policy ID {} status updated to LAPSED due to overdue payment exceeding {} days grace period", p.getPolicyId(), graceDays);
 			}
 		}
 	}
@@ -266,6 +303,14 @@ public class PolicyServiceImpl implements PolicyService {
 	private PolicyResponse mapToResponse(Policy p) {
 
 		checkAndSetLapsed(p);
+
+		String selectedType = (p.getSelectedPremiumType() != null)
+				? p.getSelectedPremiumType().name()
+				: (p.getPlan().getPremiumType() != null ? p.getPlan().getPremiumType().name() : "ANNUAL");
+
+		Double instAmount = (p.getInstallmentAmount() != null)
+				? p.getInstallmentAmount()
+				: calculateInstallment(p.getPlan().getPremiumAmount(), p.getPlan(), p.getSelectedPremiumType() != null ? p.getSelectedPremiumType() : p.getPlan().getPremiumType());
 
 		return PolicyResponse.builder()
 				.policyId(p.getPolicyId())
@@ -275,6 +320,8 @@ public class PolicyServiceImpl implements PolicyService {
 				.planId(p.getPlan().getPlanId())
 				.planName(p.getPlan().getPlanName())
 				.premiumAmount(p.getPlan().getPremiumAmount())
+				.selectedPremiumType(selectedType)
+				.installmentAmount(instAmount)
 				.startDate(p.getStartDate())
 				.endDate(p.getEndDate())
 				.status(p.getStatus().name())

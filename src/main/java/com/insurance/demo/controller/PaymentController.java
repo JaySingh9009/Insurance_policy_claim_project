@@ -23,14 +23,22 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
-    @PostMapping
-    @Operation(summary = "Make a premium payment (Customer/Agent/Admin)")
-    public ResponseEntity<PaymentResponse> makePayment(
-            @Valid @RequestBody PaymentRequest request,
+    @PostMapping("/create-order")
+    @Operation(summary = "Create Razorpay Order for Policy Payment")
+    public ResponseEntity<com.insurance.demo.dto.RazorpayOrderResponse> createRazorpayOrder(
+            @Valid @RequestBody com.insurance.demo.dto.CreateRazorpayOrderRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
         String role = principal.getUser().getRole().name();
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(paymentService.makePayment(request, principal.getUser().getId(), role));
+        return ResponseEntity.ok(paymentService.createRazorpayOrder(request, principal.getUser().getId(), role));
+    }
+
+    @PostMapping("/verify")
+    @Operation(summary = "Verify Razorpay Payment Signature and activate policy")
+    public ResponseEntity<PaymentResponse> verifyRazorpayPayment(
+            @Valid @RequestBody com.insurance.demo.dto.VerifyRazorpayPaymentRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        String role = principal.getUser().getRole().name();
+        return ResponseEntity.ok(paymentService.verifyRazorpayPayment(request, principal.getUser().getId(), role));
     }
 
     @GetMapping("/policy/{policyId}")

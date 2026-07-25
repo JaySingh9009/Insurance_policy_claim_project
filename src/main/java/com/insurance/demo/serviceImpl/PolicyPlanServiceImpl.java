@@ -52,12 +52,25 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
 
         PremiumType premiumType = parsePremiumType(request.getPremiumType());
 
+        Set<PremiumType> allowedTypes = new java.util.HashSet<>();
+        if (request.getAllowedPremiumTypes() != null && !request.getAllowedPremiumTypes().isEmpty()) {
+            for (String t : request.getAllowedPremiumTypes()) {
+                try {
+                    allowedTypes.add(PremiumType.valueOf(t.toUpperCase()));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        }
+        if (allowedTypes.isEmpty()) {
+            allowedTypes.add(premiumType);
+        }
+
         PolicyPlan plan = PolicyPlan.builder()
                 .product(product)
                 .planName(request.getPlanName())
                 .coverageAmount(request.getCoverageAmount())
                 .premiumAmount(request.getPremiumAmount())
                 .premiumType(premiumType)
+                .allowedPremiumTypes(allowedTypes)
                 .durationInYears(request.getDurationInYears())
                 .termsAndConditions(request.getTermsAndConditions())
                 .active(true)
@@ -86,11 +99,24 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
 
         PremiumType premiumType = parsePremiumType(request.getPremiumType());
 
+        Set<PremiumType> allowedTypes = new java.util.HashSet<>();
+        if (request.getAllowedPremiumTypes() != null && !request.getAllowedPremiumTypes().isEmpty()) {
+            for (String t : request.getAllowedPremiumTypes()) {
+                try {
+                    allowedTypes.add(PremiumType.valueOf(t.toUpperCase()));
+                } catch (IllegalArgumentException ignored) {}
+            }
+        }
+        if (allowedTypes.isEmpty()) {
+            allowedTypes.add(premiumType);
+        }
+
         plan.setProduct(product);
         plan.setPlanName(request.getPlanName());
         plan.setCoverageAmount(request.getCoverageAmount());
         plan.setPremiumAmount(request.getPremiumAmount());
         plan.setPremiumType(premiumType);
+        plan.setAllowedPremiumTypes(allowedTypes);
         plan.setDurationInYears(request.getDurationInYears());
         plan.setTermsAndConditions(request.getTermsAndConditions());
 
@@ -145,7 +171,7 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
         try {
             return PremiumType.valueOf(type.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new BadRequestException("Invalid premium type: " + type + ". Valid values: ONE_TIME, ANNUAL");
+            throw new BadRequestException("Invalid premium type: " + type + ". Valid values: ONE_TIME, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL");
         }
     }
 
@@ -168,12 +194,22 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
     }
 
     private PolicyPlanResponse mapToResponse(PolicyPlan p) {
+        Set<String> allowedStringTypes = new java.util.HashSet<>();
+        if (p.getAllowedPremiumTypes() != null && !p.getAllowedPremiumTypes().isEmpty()) {
+            for (PremiumType pt : p.getAllowedPremiumTypes()) {
+                allowedStringTypes.add(pt.name());
+            }
+        } else if (p.getPremiumType() != null) {
+            allowedStringTypes.add(p.getPremiumType().name());
+        }
+
         return PolicyPlanResponse.builder()
                 .planId(p.getPlanId())
                 .planName(p.getPlanName())
                 .coverageAmount(p.getCoverageAmount())
                 .premiumAmount(p.getPremiumAmount())
-                .premiumType(p.getPremiumType().name())
+                .premiumType(p.getPremiumType() != null ? p.getPremiumType().name() : "ANNUAL")
+                .allowedPremiumTypes(allowedStringTypes)
                 .durationInYears(p.getDurationInYears())
                 .termsAndConditions(p.getTermsAndConditions())
                 .active(p.isActive())

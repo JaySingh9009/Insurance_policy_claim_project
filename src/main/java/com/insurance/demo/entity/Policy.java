@@ -43,6 +43,12 @@ public class Policy {
     @Column(nullable = false)
     private PolicyStatus status;
 
+    @Enumerated(EnumType.STRING)
+    private com.insurance.demo.enums.PremiumType selectedPremiumType;
+
+    @Column
+    private Double installmentAmount;
+
     @Column(nullable = false)
     @Builder.Default
     private Double totalPremiumPaid = 0.0;

@@ -32,11 +32,11 @@ public class PasswordResetOtp {
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
-    /** true = OTP verify ho gaya, ab reset-password call karo */
+
     @Column(nullable = false)
     private boolean verified;
 
-    /** true = password successfully reset ho gaya, record expire */
+
     @Column(nullable = false)
     private boolean used;
 

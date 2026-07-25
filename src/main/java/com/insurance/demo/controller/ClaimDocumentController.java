@@ -23,23 +23,7 @@ public class ClaimDocumentController {
 
     private final ClaimDocumentService claimDocumentService;
 
-    /**
-     * STEP 1 — Upload a file to Cloudinary BEFORE submitting the claim.
-     *
-     * POST /api/claim-documents/upload
-     * Content-Type: multipart/form-data
-     *
-     * Form fields:
-     *   - file         → actual file (PDF, JPEG, PNG, WEBP — max 10 MB)
-     *   - documentName → e.g. "Hospital Bill"
-     *   - documentType → e.g. "MEDICAL_REPORT", "POLICE_FIR", "PHOTO"
-     *
-     * Response returns:
-     *   - documentUrl  → Cloudinary HTTPS URL (copy this into ClaimRequest.documents)
-     *   - publicId     → Cloudinary public_id  (copy this into ClaimRequest.documents)
-     *
-     * Then use those values when calling POST /api/claims.
-     */
+
     @PreAuthorize("hasAnyRole('CUSTOMER', 'AGENT', 'ADMIN')")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
@@ -55,9 +39,7 @@ public class ClaimDocumentController {
                 .body(claimDocumentService.preUploadDocument(documentName, documentType, file));
     }
 
-    /**
-     * Get all documents attached to a claim (with Cloudinary URLs).
-     */
+    
     @GetMapping("/{claimId}")
     @Operation(summary = "Get all documents for a claim (returns Cloudinary URLs)")
     public ResponseEntity<List<ClaimDocumentResponse>> getDocuments(@PathVariable Long claimId) {

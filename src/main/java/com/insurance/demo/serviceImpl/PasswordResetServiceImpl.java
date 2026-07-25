@@ -36,20 +36,17 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Value("${app.otp.expiry-minutes:5}")
     private long expiryMinutes;
 
-    // ─────────────────────────────────────────────────────────
-    // Step 1: Email check karo → OTP generate karo → email bhejo
-    // ─────────────────────────────────────────────────────────
+
     @Override
     @Transactional
     public String sendForgotPasswordOtp(ForgotPasswordRequest request) {
         log.info("Forgot password OTP request for email: {}", request.getEmail());
 
-        // User exist karta hai ya nahi check karo
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No account found with email: " + request.getEmail()));
 
-        // Security: inactive account ko bhi OTP mat bhejo
+
         if (!user.isActive()) {
             throw new BadRequestException(
                     "Your account is not yet activated. Please verify your registration OTP first.");
@@ -113,9 +110,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         return "OTP verified successfully. You can now set your new password.";
     }
 
-    // ─────────────────────────────────────────────────────────
-    // Step 3: Naya password set karo
-    // ─────────────────────────────────────────────────────────
+
     @Override
     @Transactional
     public String resetPassword(ResetPasswordRequest request) {
@@ -125,7 +120,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No account found with email: " + request.getEmail()));
 
-        // Verified OTP dhundho
         PasswordResetOtp resetOtp = passwordResetOtpRepository
                 .findTopByUserAndVerifiedTrueAndUsedFalseOrderByCreatedAtDesc(user)
                 .orElseThrow(() -> new BadRequestException(
@@ -143,11 +137,10 @@ public class PasswordResetServiceImpl implements PasswordResetService {
                     "Invalid OTP. Please try the forgot password process again.");
         }
 
-        // Naya password set karo
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        // OTP ko used mark karo
         resetOtp.setUsed(true);
         passwordResetOtpRepository.save(resetOtp);
 
@@ -155,17 +148,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         return "Password has been reset successfully. You can now login with your new password.";
     }
 
-    // ─────────────────────────────────────────────────────────
-    // Helper methods
-    // ─────────────────────────────────────────────────────────
+
     private String generateSixDigitOtp() {
         int number = secureRandom.nextInt(900000) + 100000;
         return String.valueOf(number);
     }
 
-    /**
-     * Email mask karta hai security ke liye: "example@gmail.com" → "ex****@gmail.com"
-     */
+
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) return email;
         String[] parts = email.split("@");

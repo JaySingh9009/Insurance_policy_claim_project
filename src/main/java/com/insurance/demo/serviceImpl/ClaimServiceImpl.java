@@ -39,7 +39,7 @@ public class ClaimServiceImpl implements ClaimService {
     private final UserRepository userRepository;
     private final ClaimDocumentService claimDocumentService;
 
-    // ─── Submit Claim (CUSTOMER only) ─────────────────────────────────────────
+
 
     @Override
     @Transactional
@@ -86,7 +86,12 @@ public class ClaimServiceImpl implements ClaimService {
             throw new BadRequestException("Incident date cannot be prior to the policy payment/activation date");
         }
 
-        // Claim amount must not exceed coverage (including all previous claims on this policy)
+        // Incident date validation against future date
+        if (request.getIncidentDate().isAfter(LocalDate.now())) {
+            throw new BadRequestException("Incident date must not be a future date");
+        }
+
+
         List<Claim> policyClaims = claimRepository.findByPolicyPolicyId(policy.getPolicyId());
         double totalPreviousClaimed = policyClaims.stream()
                 .filter(c -> c.getStatus() != ClaimStatus.REJECTED)
@@ -115,39 +120,26 @@ public class ClaimServiceImpl implements ClaimService {
             throw new BadRequestException("At least one claim document must be submitted");
         }
 
-        // Real-world Suspicious claim logic
-        // boolean suspicious = false;
-        // if (policy.getLastPaymentDate() != null) {
-        //     long daysBetween = ChronoUnit.DAYS.between(policy.getLastPaymentDate(), LocalDate.now());
-        //     if (daysBetween <= 15) {
-        //         suspicious = true;
-        //         log.info("Claim flagged as SUSPICIOUS: raised within {} days of last payment", daysBetween);
-        //     }
-        // }
+        // Compute Fraud Risk Score
+        int riskScore = 0;
+        if (request.getClaimAmount() > (policy.getPlan().getCoverageAmount() * 0.8)) {
+            riskScore += 30;
+            log.info("Fraud Risk Score: +30 points because claim amount {} exceeds 80% of coverage {}", 
+                    request.getClaimAmount(), policy.getPlan().getCoverageAmount());
+        }
+        List<Claim> customerClaims = claimRepository.findByPolicyCustomerCustomerId(customer.getCustomerId());
+        boolean hasPriorRejected = customerClaims.stream().anyMatch(c -> c.getStatus() == ClaimStatus.REJECTED);
+        if (hasPriorRejected) {
+            riskScore += 30;
+            log.info("Fraud Risk Score: +30 points because customer has prior rejected claims");
+        }
 
-        // // Compute Fraud Risk Score
-        // int riskScore = 0;
-        // if (suspicious) {
-        //     riskScore += 40;
-        // }
-        // if (request.getClaimAmount() > (policy.getPlan().getCoverageAmount() * 0.8)) {
-        //     riskScore += 30;
-        //     log.info("Fraud Risk Score: +30 points because claim amount {} exceeds 80% of coverage {}", 
-        //             request.getClaimAmount(), policy.getPlan().getCoverageAmount());
-        // }
-        // List<Claim> customerClaims = claimRepository.findByPolicyCustomerCustomerId(customer.getCustomerId());
-        // boolean hasPriorRejected = customerClaims.stream().anyMatch(c -> c.getStatus() == ClaimStatus.REJECTED);
-        // if (hasPriorRejected) {
-        //     riskScore += 30;
-        //     log.info("Fraud Risk Score: +30 points because customer has prior rejected claims");
-        // }
-
-        // String riskLevel = "LOW";
-        // if (riskScore >= 70) {
-        //     riskLevel = "HIGH";
-        // } else if (riskScore >= 40) {
-        //     riskLevel = "MEDIUM";
-        // }
+        String riskLevel = "LOW";
+        if (riskScore >= 70) {
+            riskLevel = "HIGH";
+        } else if (riskScore >= 40) {
+            riskLevel = "MEDIUM";
+        }
 
         Claim claim = Claim.builder()
                 .claimNumber(NumberGenerator.generateClaimNumber())
@@ -156,9 +148,8 @@ public class ClaimServiceImpl implements ClaimService {
                 .claimReason(request.getClaimReason())
                 .incidentDate(request.getIncidentDate())
                 .status(ClaimStatus.SUBMITTED)
-                // .suspicious(suspicious)
-                // .fraudRiskScore(riskScore)
-                // .fraudRiskLevel(riskLevel)
+                .fraudRiskScore(riskScore)
+                .fraudRiskLevel(riskLevel)
                 .build();
 
         claim = claimRepository.save(claim);
@@ -185,19 +176,10 @@ public class ClaimServiceImpl implements ClaimService {
         Claim claim = findClaim(claimId);
         User agent = findUser(agentUserId);
 
-        // // Suspicious claim restriction
-        // if (claim.isSuspicious()) {
-        //     if (claim.getAssignedAgent() == null) {
-        //         throw new BadRequestException("This suspicious claim must be assigned to an agent by Admin first.");
-        //     }
-        //     if (!claim.getAssignedAgent().getId().equals(agentUserId)) {
-        //         throw new UnauthorizedAccessException("Only the assigned agent can review this suspicious claim.");
-        //     }
-        // }
 
         ClaimStatus targetStatus = parseStatus(request.getTargetStatus());
 
-        // Validate transition (Agent-allowed transitions only)
+
         validateAgentTransition(claim.getStatus(), targetStatus);
 
         ClaimStatus previousStatus = claim.getStatus();
@@ -219,7 +201,7 @@ public class ClaimServiceImpl implements ClaimService {
         return mapToResponse(claim);
     }
 
-    // ─── Admin Decision ────────────────────────────────────────────────────────
+
 
     @Override
     @Transactional
@@ -248,7 +230,7 @@ public class ClaimServiceImpl implements ClaimService {
         return mapToResponse(claim);
     }
 
-    // ─── Queries ──────────────────────────────────────────────────────────────
+
 
     @Override
     public ClaimResponse getClaimById(Long claimId) {
@@ -300,14 +282,9 @@ public class ClaimServiceImpl implements ClaimService {
                 .build();
     }
 
-    // ─── Transition Validation ─────────────────────────────────────────────────
 
-    /**
-     * Strictly enforced agent transitions:
-     * SUBMITTED → UNDER_REVIEW
-     * UNDER_REVIEW → RECOMMENDED_APPROVAL
-     * UNDER_REVIEW → RECOMMENDED_REJECTION
-     */
+
+
     private void validateAgentTransition(ClaimStatus current, ClaimStatus target) {
         boolean valid = false;
         if (current == ClaimStatus.SUBMITTED) {
@@ -338,7 +315,7 @@ public class ClaimServiceImpl implements ClaimService {
         }
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+
 
     private void saveHistory(Claim claim, ClaimStatus previous, ClaimStatus next, String remarks, User updatedBy) {
         ClaimStatusHistory history = ClaimStatusHistory.builder()
@@ -420,12 +397,11 @@ public class ClaimServiceImpl implements ClaimService {
                 .status(c.getStatus().name())
                 .agentRemarks(c.getAgentRemarks())
                 .adminRemarks(c.getAdminRemarks())
-                // .suspicious(c.isSuspicious())
                 .customerName(c.getPolicy().getCustomer().getUser().getFullName())
                 .assignedAgentId(c.getAssignedAgent() != null ? c.getAssignedAgent().getId() : null)
                 .assignedAgentName(c.getAssignedAgent() != null ? c.getAssignedAgent().getFullName() : null)
-                // .fraudRiskScore(c.getFraudRiskScore())
-                // .fraudRiskLevel(c.getFraudRiskLevel())
+                .fraudRiskScore(c.getFraudRiskScore())
+                .fraudRiskLevel(c.getFraudRiskLevel())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

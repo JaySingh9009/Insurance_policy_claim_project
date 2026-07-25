@@ -32,6 +32,14 @@ public class UserController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/agents")
+    @Operation(summary = "Get all agents list (Admin only)")
+    public ResponseEntity<java.util.List<UserResponse>> getAgents() {
+        PagedResponse<UserResponse> page = userService.getAllUsers(0, 100, "fullName", "asc", com.insurance.demo.enums.Role.AGENT);
+        return ResponseEntity.ok(page.getRecords());
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     @Operation(summary = "Get all users with pagination (Admin only)")
     public ResponseEntity<PagedResponse<UserResponse>> getAllUsers(

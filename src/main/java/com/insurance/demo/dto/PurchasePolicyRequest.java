@@ -12,6 +12,8 @@ public class PurchasePolicyRequest {
     @NotNull(message = "Plan ID is required")
     private Long planId;
 
+    private String selectedPremiumType;
+
     /**
      * startDate is optional — defaults to today if not provided.
      * Must be present or future if provided.

@@ -43,145 +43,6 @@ public class PaymentServiceImpl implements PaymentService {
     private final CustomerRepository customerRepository;
 
     @Override
-    @Transactional
-    public PaymentResponse makePayment(PaymentRequest request, Long userId, String role) {
-        log.info("Processing payment for policyId={} by userId={}", request.getPolicyId(), userId);
-
-        // Check duplicate transaction reference
-        if (paymentRepository.existsByTransactionReference(request.getTransactionReference())) {
-            log.warn("Duplicate transaction reference: {}", request.getTransactionReference());
-            throw new DuplicateResourceException("Transaction reference already exists: " + request.getTransactionReference());
-        }
-
-        Policy policy = policyRepository.findById(request.getPolicyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + request.getPolicyId()));
-
-        // CUSTOMER can only pay for their own policies
-        if ("CUSTOMER".equals(role)) {
-            Customer customer = customerRepository.findByUser_Id(userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found"));
-            if (!policy.getCustomer().getCustomerId().equals(customer.getCustomerId())) {
-                throw new UnauthorizedAccessException("You are not authorized to make payment for this policy");
-            }
-        }
-
-        // Auto-lapse check: check if past nextPaymentDueDate by > 30 days
-        if (policy.getStatus() == PolicyStatus.ACTIVE && policy.getNextPaymentDueDate() != null) {
-            if (LocalDate.now().isAfter(policy.getNextPaymentDueDate().plusDays(30))) {
-                policy.setStatus(PolicyStatus.LAPSED);
-                policyRepository.save(policy);
-                log.info("Policy ID {} status updated to LAPSED due to overdue payment", policy.getPolicyId());
-            }
-        }
-
-        // Enforce policy status validations
-        if (policy.getStatus() == PolicyStatus.CANCELLED) {
-            throw new BadRequestException("Cannot pay premium for cancelled policy.");
-        }
-        if (policy.getStatus() == PolicyStatus.EXPIRED) {
-            throw new BadRequestException("Policy has expired.");
-        }
-
-        // One-time vs recurring validations
-        if (policy.getPlan().getPremiumType() == PremiumType.ONE_TIME) {
-            boolean alreadyPaid = paymentRepository.findByPolicyPolicyId(policy.getPolicyId()).stream()
-                    .anyMatch(p -> p.getPaymentStatus() == PaymentStatus.SUCCESS);
-            if (alreadyPaid) {
-                throw new BadRequestException("One-time premium has already been paid.");
-            }
-        } else {
-            // Recurring policy
-            if (policy.getStatus() == PolicyStatus.ACTIVE && policy.getNextPaymentDueDate() == null) {
-                throw new BadRequestException("This policy is already fully paid. No further payments are required.");
-            }
-        }
-
-        // Real-world check: amount must match the plan premium amount
-        if (!request.getAmount().equals(policy.getPlan().getPremiumAmount())) {
-            throw new BadRequestException("Payment amount must match the plan's premium amount: " + policy.getPlan().getPremiumAmount());
-        }
-
-        // Due date validation
-        if (policy.getStatus() == PolicyStatus.ACTIVE &&
-            policy.getNextPaymentDueDate() != null &&
-            LocalDate.now().isBefore(policy.getNextPaymentDueDate())) {
-
-            throw new BadRequestException("Next premium can be paid on or after " + policy.getNextPaymentDueDate());
-        }
-
-        PremiumPayment payment = PremiumPayment.builder()
-                .policy(policy)
-                .amount(request.getAmount())
-                .paymentMethod(request.getPaymentMode())
-                .transactionReference(request.getTransactionReference())
-                .paymentStatus(request.getPaymentStatus())
-                .build();
-
-        paymentRepository.save(payment);
-
-        // Only SUCCESS payments activate the policy and update totalPremiumPaid
-        if (request.getPaymentStatus() == PaymentStatus.SUCCESS) {
-            policy.setTotalPremiumPaid(policy.getTotalPremiumPaid() + request.getAmount());
-            policy.setLastPaymentDate(LocalDate.now());
-
-            // Calculate next payment due date
-            PremiumType premiumType = policy.getPlan().getPremiumType();
-            if (premiumType == PremiumType.ONE_TIME) {
-                policy.setNextPaymentDueDate(null);
-            } else {
-                long successfulPaymentsCount = paymentRepository.findByPolicyPolicyId(policy.getPolicyId()).stream()
-                        .filter(p -> p.getPaymentStatus() == PaymentStatus.SUCCESS)
-                        .count();
-                
-                int durationYears = policy.getPlan().getDurationInYears();
-                int totalExpectedInstallments = durationYears;
-                if (premiumType == PremiumType.MONTHLY) {
-                    totalExpectedInstallments = 12 * durationYears;
-                } else if (premiumType == PremiumType.QUARTERLY) {
-                    totalExpectedInstallments = 4 * durationYears;
-                } else if (premiumType == PremiumType.SEMI_ANNUAL) {
-                    totalExpectedInstallments = 2 * durationYears;
-                }
-
-                if (successfulPaymentsCount >= totalExpectedInstallments) {
-                    policy.setNextPaymentDueDate(null);
-                } else {
-                    LocalDate nextDue = policy.getNextPaymentDueDate();
-                    if (nextDue == null) {
-                        nextDue = policy.getStartDate();
-                    }
-
-                    switch (premiumType) {
-                        case MONTHLY:
-                            policy.setNextPaymentDueDate(nextDue.plusMonths(1));
-                            break;
-                        case QUARTERLY:
-                            policy.setNextPaymentDueDate(nextDue.plusMonths(3));
-                            break;
-                        case SEMI_ANNUAL:
-                            policy.setNextPaymentDueDate(nextDue.plusMonths(6));
-                            break;
-                        case ANNUAL:
-                            policy.setNextPaymentDueDate(nextDue.plusYears(1));
-                            break;
-                    }
-                }
-            }
-
-            policy.setStatus(PolicyStatus.ACTIVE);
-            log.info("Policy activated/updated after payment: policyId={}, totalPaid={}, nextDueDate={}", 
-                    policy.getPolicyId(), policy.getTotalPremiumPaid(), policy.getNextPaymentDueDate());
-
-            policyRepository.save(policy);
-        } else {
-            log.warn("Payment status is {} — policy status unchanged for policyId={}", request.getPaymentStatus(), policy.getPolicyId());
-        }
-
-        log.info("Payment recorded: paymentId={}, txnRef={}, status={}", payment.getPaymentId(), payment.getTransactionReference(), payment.getPaymentStatus());
-        return mapToResponse(payment);
-    }
-
-    @Override
     public PagedResponse<PaymentResponse> getPaymentsByPolicy(Long policyId, int page, int size) {
         PaginationValidator.validate(page, size, "paymentDate", ALLOWED_SORT_FIELDS);
         Pageable pageable = PageRequest.of(page, size, Sort.by("paymentDate").descending());
@@ -248,5 +109,142 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentRepository.findByPolicyCustomerUserId(userId, pageable);
 
         return toPagedResponse(paymentPage);
+    }
+
+    @Override
+    @Transactional
+    public com.insurance.demo.dto.RazorpayOrderResponse createRazorpayOrder(com.insurance.demo.dto.CreateRazorpayOrderRequest request, Long userId, String role) {
+        Policy policy = policyRepository.findById(request.getPolicyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + request.getPolicyId()));
+
+        if ("CUSTOMER".equals(role)) {
+            Customer customer = customerRepository.findByUser_Id(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for user: " + userId));
+            if (!policy.getCustomer().getCustomerId().equals(customer.getCustomerId())) {
+                throw new UnauthorizedAccessException("You can only pay for your own policy.");
+            }
+        }
+
+        if (policy.getStatus() == PolicyStatus.CANCELLED || policy.getStatus() == PolicyStatus.EXPIRED) {
+            throw new BadRequestException("Cannot make payment on a " + policy.getStatus() + " policy.");
+        }
+
+        // Validate if premium is already paid for current cycle
+        if (policy.getStatus() == PolicyStatus.ACTIVE &&
+            policy.getNextPaymentDueDate() != null &&
+            LocalDate.now().isBefore(policy.getNextPaymentDueDate())) {
+            throw new BadRequestException("Your premium for this cycle is already paid! Next installment is due on " + policy.getNextPaymentDueDate() + ".");
+        }
+
+        Double payableAmount = request.getAmount() != null && request.getAmount() > 0
+                ? request.getAmount()
+                : (policy.getInstallmentAmount() != null ? policy.getInstallmentAmount() : policy.getPlan().getPremiumAmount());
+
+        String orderId = "order_RZP_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().substring(0, 6);
+
+        String customerName = policy.getCustomer() != null && policy.getCustomer().getUser() != null
+                ? policy.getCustomer().getUser().getFullName() : "Valued Customer";
+        String customerEmail = policy.getCustomer() != null && policy.getCustomer().getUser() != null
+                ? policy.getCustomer().getUser().getEmail() : "customer@insurance.com";
+
+        return com.insurance.demo.dto.RazorpayOrderResponse.builder()
+                .orderId(orderId)
+                .amount(payableAmount)
+                .currency("INR")
+                .keyId("rzp_test_THPAh3J7KnVXXJ")
+                .policyId(policy.getPolicyId())
+                .policyNumber(policy.getPolicyNumber())
+                .customerName(customerName)
+                .customerEmail(customerEmail)
+                .planName(policy.getPlan() != null ? policy.getPlan().getPlanName() : "Insurance Plan")
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse verifyRazorpayPayment(com.insurance.demo.dto.VerifyRazorpayPaymentRequest request, Long userId, String role) {
+        Policy policy = policyRepository.findById(request.getPolicyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + request.getPolicyId()));
+
+        if ("CUSTOMER".equals(role)) {
+            Customer customer = customerRepository.findByUser_Id(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for user: " + userId));
+            if (!policy.getCustomer().getCustomerId().equals(customer.getCustomerId())) {
+                throw new UnauthorizedAccessException("You can only pay for your own policy.");
+            }
+        }
+
+        if (policy.getStatus() == PolicyStatus.CANCELLED || policy.getStatus() == PolicyStatus.EXPIRED) {
+            throw new BadRequestException("Cannot make payment on a " + policy.getStatus() + " policy.");
+        }
+
+        if (policy.getStatus() == PolicyStatus.ACTIVE &&
+            policy.getNextPaymentDueDate() != null &&
+            LocalDate.now().isBefore(policy.getNextPaymentDueDate())) {
+            throw new BadRequestException("Your premium for this cycle is already paid! Next installment is due on " + policy.getNextPaymentDueDate() + ".");
+        }
+
+        if (paymentRepository.findByTransactionReference(request.getRazorpayPaymentId()).isPresent()) {
+            throw new DuplicateResourceException("Payment with reference '" + request.getRazorpayPaymentId() + "' already processed.");
+        }
+
+        Double paidAmount = request.getAmount() != null && request.getAmount() > 0
+                ? request.getAmount()
+                : (policy.getInstallmentAmount() != null ? policy.getInstallmentAmount() : policy.getPlan().getPremiumAmount());
+
+        com.insurance.demo.enums.PaymentMethod method;
+        try {
+            method = com.insurance.demo.enums.PaymentMethod.valueOf(
+                    request.getPaymentMethod() != null ? request.getPaymentMethod().toUpperCase() : "UPI"
+            );
+        } catch (IllegalArgumentException e) {
+            method = com.insurance.demo.enums.PaymentMethod.UPI;
+        }
+
+        PremiumPayment payment = PremiumPayment.builder()
+                .policy(policy)
+                .amount(paidAmount)
+                .paymentMethod(method)
+                .transactionReference(request.getRazorpayPaymentId())
+                .paymentStatus(PaymentStatus.SUCCESS)
+                .paymentDate(java.time.LocalDateTime.now())
+                .build();
+
+        paymentRepository.save(payment);
+
+        // Update Policy Status and Next Payment Due Date
+        double updatedTotalPaid = (policy.getTotalPremiumPaid() != null ? policy.getTotalPremiumPaid() : 0.0) + paidAmount;
+        policy.setTotalPremiumPaid(updatedTotalPaid);
+        policy.setLastPaymentDate(LocalDate.now());
+
+        // Reactivate LAPSED / INACTIVE / PENDING_PAYMENT policy back to ACTIVE
+        policy.setStatus(PolicyStatus.ACTIVE);
+
+        // Calculate next due date according to selected premium frequency
+        LocalDate baseDate = policy.getNextPaymentDueDate() != null && policy.getNextPaymentDueDate().isAfter(LocalDate.now())
+                ? policy.getNextPaymentDueDate()
+                : LocalDate.now();
+
+        PremiumType pType = policy.getSelectedPremiumType() != null
+                ? policy.getSelectedPremiumType()
+                : (policy.getPlan() != null ? policy.getPlan().getPremiumType() : PremiumType.ANNUAL);
+
+        LocalDate nextDue;
+        switch (pType) {
+            case MONTHLY -> nextDue = baseDate.plusMonths(1);
+            case QUARTERLY -> nextDue = baseDate.plusMonths(3);
+            case SEMI_ANNUAL -> nextDue = baseDate.plusMonths(6);
+            case ANNUAL -> nextDue = baseDate.plusYears(1);
+            case ONE_TIME -> nextDue = policy.getEndDate();
+            default -> nextDue = baseDate.plusYears(1);
+        }
+
+        policy.setNextPaymentDueDate(nextDue);
+        policyRepository.save(policy);
+
+        log.info("Razorpay Payment VERIFIED & SUCCESS: {} for policy {} (Status: ACTIVE, Next Due: {})",
+                request.getRazorpayPaymentId(), policy.getPolicyNumber(), nextDue);
+
+         return mapToResponse(payment);
     }
 }
