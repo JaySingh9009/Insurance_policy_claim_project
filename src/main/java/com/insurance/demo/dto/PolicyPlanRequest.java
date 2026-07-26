@@ -37,8 +37,6 @@ public class PolicyPlanRequest {
     )
     private String premiumType;
 
-    private java.util.Set<String> allowedPremiumTypes;
-
     @NotNull(message = "Duration is required")
     @Min(value = 1, message = "Duration must be at least 1 year")
     @Max(value = 40, message = "Duration must not exceed 40 years")

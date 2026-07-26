@@ -176,17 +176,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .build();
     }
 
-    @Override
-    public CustomerResponse getCustomerById(Long customerId) {
 
-        Customer customer = customerRepository.findById(customerId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Customer not found with ID: "
-                                        + customerId));
-
-        return mapToResponse(customer);
-    }
 
     private User findUser(Long userId) {
 

@@ -38,12 +38,6 @@ public class PolicyPlan {
     @Column(nullable = false)
     private PremiumType premiumType;
 
-    @ElementCollection(targetClass = PremiumType.class, fetch = FetchType.EAGER)
-    @CollectionTable(name = "plan_allowed_premium_types", joinColumns = @JoinColumn(name = "plan_id"))
-    @Enumerated(EnumType.STRING)
-    @Builder.Default
-    private java.util.Set<PremiumType> allowedPremiumTypes = new java.util.HashSet<>();
-
     @Column(nullable = false)
     private Integer durationInYears;
 

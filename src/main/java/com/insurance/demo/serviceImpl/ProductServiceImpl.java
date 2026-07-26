@@ -89,13 +89,7 @@ public class ProductServiceImpl implements ProductService {
         return toPagedResponse(productPage);
     }
 
-    @Override
-    public PagedResponse<ProductResponse> getActiveProducts(int page, int size, String sortBy, String sortDir) {
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
-        Page<InsuranceProduct> productPage = productRepository.findByActiveTrue(pageable);
-        return toPagedResponse(productPage);
-    }
+
 
     @Override
     public void deactivateProduct(Long id) {

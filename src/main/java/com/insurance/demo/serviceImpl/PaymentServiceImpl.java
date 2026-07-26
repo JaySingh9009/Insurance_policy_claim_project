@@ -42,13 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PolicyRepository policyRepository;
     private final CustomerRepository customerRepository;
 
-    @Override
-    public PagedResponse<PaymentResponse> getPaymentsByPolicy(Long policyId, int page, int size) {
-        PaginationValidator.validate(page, size, "paymentDate", ALLOWED_SORT_FIELDS);
-        Pageable pageable = PageRequest.of(page, size, Sort.by("paymentDate").descending());
-        Page<PremiumPayment> paymentPage = paymentRepository.findByPolicyPolicyId(policyId, pageable);
-        return toPagedResponse(paymentPage);
-    }
+
 
     @Override
     public PagedResponse<PaymentResponse> getAllPayments(int page, int size, String sortBy, String sortDir) {

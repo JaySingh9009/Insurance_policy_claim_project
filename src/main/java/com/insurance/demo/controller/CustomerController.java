@@ -77,13 +77,5 @@ public class CustomerController {
                         sortDir));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
-    @GetMapping("/{id}")
-    @Operation(summary = "Get customer by ID (Admin/Agent)")
-    public ResponseEntity<CustomerResponse> getCustomerById(
-            @PathVariable Long id) {
 
-        return ResponseEntity.ok(
-                customerService.getCustomerById(id));
-    }
 }

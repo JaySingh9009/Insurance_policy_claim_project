@@ -10,7 +10,7 @@ import com.insurance.demo.dto.VerifyRazorpayPaymentRequest;
 public interface PaymentService {
     RazorpayOrderResponse createRazorpayOrder(CreateRazorpayOrderRequest request, Long userId, String role);
     PaymentResponse verifyRazorpayPayment(VerifyRazorpayPaymentRequest request, Long userId, String role);
-    PagedResponse<PaymentResponse> getPaymentsByPolicy(Long policyId, int page, int size);
+
     PagedResponse<PaymentResponse> getAllPayments(int page, int size, String sortBy, String sortDir);
     PagedResponse<PaymentResponse> getMyPayments(
             Long userId,

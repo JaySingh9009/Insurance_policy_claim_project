@@ -36,11 +36,7 @@ public class ProductController {
         return ResponseEntity.ok(productService.updateProduct(id, request));
     }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Get product by ID (All authenticated)")
-    public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
-        return ResponseEntity.ok(productService.getProductById(id));
-    }
+
 
     @GetMapping
     @Operation(summary = "Get all products with pagination (All authenticated)")
@@ -52,15 +48,7 @@ public class ProductController {
         return ResponseEntity.ok(productService.getAllProducts(page, size, sortBy, sortDir));
     }
 
-    @GetMapping("/active")
-    @Operation(summary = "Get active products (All authenticated)")
-    public ResponseEntity<PagedResponse<ProductResponse>> getActiveProducts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "productName") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
-        return ResponseEntity.ok(productService.getActiveProducts(page, size, sortBy, sortDir));
-    }
+
 
     @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/deactivate")

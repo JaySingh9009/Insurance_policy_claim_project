@@ -23,6 +23,5 @@ public interface CustomerService {
             String sortBy,
             String sortDir);
 
-    CustomerResponse getCustomerById(
-            Long customerId);
+
 }

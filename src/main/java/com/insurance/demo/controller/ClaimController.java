@@ -48,7 +48,7 @@ public class ClaimController {
 
     
     @PreAuthorize("hasRole('AGENT')")
-    @PatchMapping("/{id}/review")
+    @RequestMapping(value = "/{id}/review", method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
     @Operation(summary = "Agent moves claim to UNDER_REVIEW")
     public ResponseEntity<ClaimResponse> reviewClaim(
             @PathVariable Long id,
@@ -59,7 +59,7 @@ public class ClaimController {
     }
 
     @PreAuthorize("hasRole('AGENT')")
-    @PatchMapping("/{id}/recommend")
+    @RequestMapping(value = "/{id}/recommend", method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
     @Operation(summary = "Agent recommends APPROVAL or REJECTION")
     public ResponseEntity<ClaimResponse> recommendClaim(
             @PathVariable Long id,
@@ -70,7 +70,7 @@ public class ClaimController {
 
 
     @PreAuthorize("hasRole('ADMIN')")
-    @PatchMapping("/{id}/decision")
+    @RequestMapping(value = {"/{id}/decision", "/{id}/decide"}, method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
     @Operation(summary = "Admin makes final APPROVED or REJECTED decision")
     public ResponseEntity<ClaimResponse> makeDecision(
             @PathVariable Long id,
@@ -80,7 +80,7 @@ public class ClaimController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
-    @PatchMapping({"/{id}/assign", "/{id}/assign-agent"})
+    @RequestMapping(value = {"/{id}/assign", "/{id}/assign-agent"}, method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
     @Operation(summary = "Admin assigns an agent to a claim (Admin only)")
     public ResponseEntity<ClaimResponse> assignAgent(
             @PathVariable Long id,
@@ -105,20 +105,8 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.getAllClaims(page, size, sortBy, sortDir));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
-    @GetMapping("/{id}")
-    @Operation(summary = "Get claim by ID")
-    public ResponseEntity<ClaimResponse> getClaimById(@PathVariable Long id) {
-        return ResponseEntity.ok(claimService.getClaimById(id));
-    }
 
 
-    @GetMapping("/{id}/history")
-    @Operation(summary = "Get claim status history (Customer for own claim)")
-    public ResponseEntity<PagedResponse<ClaimHistoryResponse>> getClaimHistory(
-            @PathVariable Long id,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(claimService.getClaimHistory(id, page, size));
-    }
+
+
 }

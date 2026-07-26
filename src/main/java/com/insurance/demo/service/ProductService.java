@@ -9,7 +9,7 @@ public interface ProductService {
     ProductResponse updateProduct(Long id, ProductRequest request);
     ProductResponse getProductById(Long id);
     PagedResponse<ProductResponse> getAllProducts(int page, int size, String sortBy, String sortDir);
-    PagedResponse<ProductResponse> getActiveProducts(int page, int size, String sortBy, String sortDir);
+
     void deactivateProduct(Long id);
     void activateProduct(Long id);
 }

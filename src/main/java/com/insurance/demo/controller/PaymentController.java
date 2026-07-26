@@ -41,14 +41,7 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.verifyRazorpayPayment(request, principal.getUser().getId(), role));
     }
 
-    @GetMapping("/policy/{policyId}")
-    @Operation(summary = "Get payments for a policy")
-    public ResponseEntity<PagedResponse<PaymentResponse>> getPaymentsByPolicy(
-            @PathVariable Long policyId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(paymentService.getPaymentsByPolicy(policyId, page, size));
-    }
+
 
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
     @GetMapping

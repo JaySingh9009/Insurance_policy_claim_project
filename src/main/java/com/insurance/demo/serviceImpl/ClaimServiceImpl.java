@@ -120,27 +120,6 @@ public class ClaimServiceImpl implements ClaimService {
             throw new BadRequestException("At least one claim document must be submitted");
         }
 
-        // Compute Fraud Risk Score
-        int riskScore = 0;
-        if (request.getClaimAmount() > (policy.getPlan().getCoverageAmount() * 0.8)) {
-            riskScore += 30;
-            log.info("Fraud Risk Score: +30 points because claim amount {} exceeds 80% of coverage {}", 
-                    request.getClaimAmount(), policy.getPlan().getCoverageAmount());
-        }
-        List<Claim> customerClaims = claimRepository.findByPolicyCustomerCustomerId(customer.getCustomerId());
-        boolean hasPriorRejected = customerClaims.stream().anyMatch(c -> c.getStatus() == ClaimStatus.REJECTED);
-        if (hasPriorRejected) {
-            riskScore += 30;
-            log.info("Fraud Risk Score: +30 points because customer has prior rejected claims");
-        }
-
-        String riskLevel = "LOW";
-        if (riskScore >= 70) {
-            riskLevel = "HIGH";
-        } else if (riskScore >= 40) {
-            riskLevel = "MEDIUM";
-        }
-
         Claim claim = Claim.builder()
                 .claimNumber(NumberGenerator.generateClaimNumber())
                 .policy(policy)
@@ -148,8 +127,6 @@ public class ClaimServiceImpl implements ClaimService {
                 .claimReason(request.getClaimReason())
                 .incidentDate(request.getIncidentDate())
                 .status(ClaimStatus.SUBMITTED)
-                .fraudRiskScore(riskScore)
-                .fraudRiskLevel(riskLevel)
                 .build();
 
         claim = claimRepository.save(claim);
@@ -176,6 +153,14 @@ public class ClaimServiceImpl implements ClaimService {
         Claim claim = findClaim(claimId);
         User agent = findUser(agentUserId);
 
+        if (claim.getAssignedAgent() == null) {
+            throw new BadRequestException("This claim has not been assigned to any insurance officer yet. Only the assigned officer can review or recommend it.");
+        }
+
+        if (!claim.getAssignedAgent().getId().equals(agentUserId)) {
+            throw new BadRequestException("You are not assigned to this claim. Only the assigned officer (" 
+                    + claim.getAssignedAgent().getFullName() + ") can review or recommend it.");
+        }
 
         ClaimStatus targetStatus = parseStatus(request.getTargetStatus());
 
@@ -232,10 +217,7 @@ public class ClaimServiceImpl implements ClaimService {
 
 
 
-    @Override
-    public ClaimResponse getClaimById(Long claimId) {
-        return mapToResponse(findClaim(claimId));
-    }
+
 
     @Override
     public PagedResponse<ClaimResponse> getAllClaims(int page, int size, String sortBy, String sortDir) {
@@ -257,30 +239,7 @@ public class ClaimServiceImpl implements ClaimService {
         return toPagedResponse(claimPage);
     }
 
-    @Override
-    public PagedResponse<ClaimHistoryResponse> getClaimHistory(Long claimId, int page, int size) {
-        PaginationValidator.validate(page, size, "updatedAt", Set.of("updatedAt"));
-        Pageable pageable = PageRequest.of(page, size, Sort.by("updatedAt").ascending());
-        List<ClaimStatusHistory> history = historyRepository.findByClaimClaimId(claimId);
 
-        List<ClaimHistoryResponse> records = history.stream().map(h -> ClaimHistoryResponse.builder()
-                .historyId(h.getHistoryId())
-                .previousStatus(h.getPreviousStatus() != null ? h.getPreviousStatus().name() : null)
-                .newStatus(h.getNewStatus().name())
-                .remarks(h.getRemarks())
-                .updatedBy(h.getUpdatedBy() != null ? h.getUpdatedBy().getFullName() : "System")
-                .updatedAt(h.getUpdatedAt())
-                .build()).toList();
-
-        return PagedResponse.<ClaimHistoryResponse>builder()
-                .records(records)
-                .currentPage(page)
-                .pageSize(size)
-                .totalRecords(records.size())
-                .totalPages(1)
-                .isLastPage(true)
-                .build();
-    }
 
 
 
@@ -385,7 +344,17 @@ public class ClaimServiceImpl implements ClaimService {
         return mapToResponse(claim);
     }
 
+    private static final Set<ClaimStatus> AGENT_ACTIVE_STATUSES = Set.of(
+            ClaimStatus.SUBMITTED,
+            ClaimStatus.UNDER_REVIEW
+    );
+
     private ClaimResponse mapToResponse(Claim c) {
+        Long agentId = c.getAssignedAgent() != null ? c.getAssignedAgent().getId() : null;
+        Long activeTaskCount = agentId != null
+                ? claimRepository.countByAssignedAgentIdAndStatusIn(agentId, AGENT_ACTIVE_STATUSES)
+                : null;
+
         return ClaimResponse.builder()
                 .claimId(c.getClaimId())
                 .claimNumber(c.getClaimNumber())
@@ -398,10 +367,9 @@ public class ClaimServiceImpl implements ClaimService {
                 .agentRemarks(c.getAgentRemarks())
                 .adminRemarks(c.getAdminRemarks())
                 .customerName(c.getPolicy().getCustomer().getUser().getFullName())
-                .assignedAgentId(c.getAssignedAgent() != null ? c.getAssignedAgent().getId() : null)
+                .assignedAgentId(agentId)
                 .assignedAgentName(c.getAssignedAgent() != null ? c.getAssignedAgent().getFullName() : null)
-                .fraudRiskScore(c.getFraudRiskScore())
-                .fraudRiskLevel(c.getFraudRiskLevel())
+                .assignedAgentActiveTaskCount(activeTaskCount)
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

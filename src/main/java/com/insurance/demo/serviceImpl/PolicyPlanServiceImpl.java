@@ -52,25 +52,12 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
 
         PremiumType premiumType = parsePremiumType(request.getPremiumType());
 
-        Set<PremiumType> allowedTypes = new java.util.HashSet<>();
-        if (request.getAllowedPremiumTypes() != null && !request.getAllowedPremiumTypes().isEmpty()) {
-            for (String t : request.getAllowedPremiumTypes()) {
-                try {
-                    allowedTypes.add(PremiumType.valueOf(t.toUpperCase()));
-                } catch (IllegalArgumentException ignored) {}
-            }
-        }
-        if (allowedTypes.isEmpty()) {
-            allowedTypes.add(premiumType);
-        }
-
         PolicyPlan plan = PolicyPlan.builder()
                 .product(product)
                 .planName(request.getPlanName())
                 .coverageAmount(request.getCoverageAmount())
                 .premiumAmount(request.getPremiumAmount())
                 .premiumType(premiumType)
-                .allowedPremiumTypes(allowedTypes)
                 .durationInYears(request.getDurationInYears())
                 .termsAndConditions(request.getTermsAndConditions())
                 .active(true)
@@ -81,54 +68,7 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
         return mapToResponse(plan);
     }
 
-    @Override
-    public PolicyPlanResponse updatePlan(Long id, PolicyPlanRequest request) {
-        log.info("Updating plan: planId={}", id);
 
-        PolicyPlan plan = findPlan(id);
-        InsuranceProduct product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + request.getProductId()));
-
-        if (!product.isActive()) {
-            throw new BadRequestException("Cannot link plan to an inactive product");
-        }
-
-        if (request.getCoverageAmount() <= request.getPremiumAmount()) {
-            throw new BadRequestException("Coverage amount must be greater than premium amount");
-        }
-
-        PremiumType premiumType = parsePremiumType(request.getPremiumType());
-
-        Set<PremiumType> allowedTypes = new java.util.HashSet<>();
-        if (request.getAllowedPremiumTypes() != null && !request.getAllowedPremiumTypes().isEmpty()) {
-            for (String t : request.getAllowedPremiumTypes()) {
-                try {
-                    allowedTypes.add(PremiumType.valueOf(t.toUpperCase()));
-                } catch (IllegalArgumentException ignored) {}
-            }
-        }
-        if (allowedTypes.isEmpty()) {
-            allowedTypes.add(premiumType);
-        }
-
-        plan.setProduct(product);
-        plan.setPlanName(request.getPlanName());
-        plan.setCoverageAmount(request.getCoverageAmount());
-        plan.setPremiumAmount(request.getPremiumAmount());
-        plan.setPremiumType(premiumType);
-        plan.setAllowedPremiumTypes(allowedTypes);
-        plan.setDurationInYears(request.getDurationInYears());
-        plan.setTermsAndConditions(request.getTermsAndConditions());
-
-        plan = planRepository.save(plan);
-        log.info("Plan updated: planId={}", plan.getPlanId());
-        return mapToResponse(plan);
-    }
-
-    @Override
-    public PolicyPlanResponse getPlanById(Long id) {
-        return mapToResponse(findPlan(id));
-    }
 
     @Override
     public PagedResponse<PolicyPlanResponse> getActivePlans(int page, int size, String sortBy, String sortDir) {
@@ -138,13 +78,7 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
         return toPagedResponse(planPage);
     }
 
-    @Override
-    public PagedResponse<PolicyPlanResponse> getPlansByProduct(Long productId, int page, int size) {
-        PaginationValidator.validate(page, size, "createdAt", ALLOWED_SORT_FIELDS);
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<PolicyPlan> planPage = planRepository.findByProductProductId(productId, pageable);
-        return toPagedResponse(planPage);
-    }
+
 
     @Override
     public void deactivatePlan(Long id) {
@@ -194,22 +128,12 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
     }
 
     private PolicyPlanResponse mapToResponse(PolicyPlan p) {
-        Set<String> allowedStringTypes = new java.util.HashSet<>();
-        if (p.getAllowedPremiumTypes() != null && !p.getAllowedPremiumTypes().isEmpty()) {
-            for (PremiumType pt : p.getAllowedPremiumTypes()) {
-                allowedStringTypes.add(pt.name());
-            }
-        } else if (p.getPremiumType() != null) {
-            allowedStringTypes.add(p.getPremiumType().name());
-        }
-
         return PolicyPlanResponse.builder()
                 .planId(p.getPlanId())
                 .planName(p.getPlanName())
                 .coverageAmount(p.getCoverageAmount())
                 .premiumAmount(p.getPremiumAmount())
                 .premiumType(p.getPremiumType() != null ? p.getPremiumType().name() : "ANNUAL")
-                .allowedPremiumTypes(allowedStringTypes)
                 .durationInYears(p.getDurationInYears())
                 .termsAndConditions(p.getTermsAndConditions())
                 .active(p.isActive())

@@ -24,8 +24,7 @@ public class ClaimResponse {
     private String customerName;
     private Long assignedAgentId;
     private String assignedAgentName;
-    private Integer fraudRiskScore;
-    private String fraudRiskLevel;
+    private Long assignedAgentActiveTaskCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

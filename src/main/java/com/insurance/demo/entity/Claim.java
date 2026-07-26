@@ -51,14 +51,6 @@ public class Claim {
     @JoinColumn(name = "assigned_agent_id")
     private User assignedAgent;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private Integer fraudRiskScore = 0;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private String fraudRiskLevel = "LOW";
-
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

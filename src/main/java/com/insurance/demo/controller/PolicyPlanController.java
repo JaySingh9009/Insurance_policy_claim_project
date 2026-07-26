@@ -28,19 +28,9 @@ public class PolicyPlanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(planService.createPlan(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
-    @PutMapping("/{id}")
-    @Operation(summary = "Update a policy plan (Admin only)")
-    public ResponseEntity<PolicyPlanResponse> updatePlan(
-            @PathVariable Long id, @Valid @RequestBody PolicyPlanRequest request) {
-        return ResponseEntity.ok(planService.updatePlan(id, request));
-    }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Get plan by ID")
-    public ResponseEntity<PolicyPlanResponse> getPlanById(@PathVariable Long id) {
-        return ResponseEntity.ok(planService.getPlanById(id));
-    }
+
+
 
     @GetMapping("/active")
     @Operation(summary = "Get all active plans with pagination")
@@ -52,14 +42,7 @@ public class PolicyPlanController {
         return ResponseEntity.ok(planService.getActivePlans(page, size, sortBy, sortDir));
     }
 
-    @GetMapping("/product/{productId}")
-    @Operation(summary = "Get plans by product ID")
-    public ResponseEntity<PagedResponse<PolicyPlanResponse>> getPlansByProduct(
-            @PathVariable Long productId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(planService.getPlansByProduct(productId, page, size));
-    }
+
 
     @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/deactivate")

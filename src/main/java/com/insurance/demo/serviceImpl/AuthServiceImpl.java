@@ -37,19 +37,29 @@ public class AuthServiceImpl implements AuthService {
     public String register(RegisterRequest request) {
         log.info("Registering new customer: {}", request.getEmail());
 
-        if (userRepository.existsByEmail(request.getEmail())) {
-            log.warn("Registration failed - email already exists: {}", request.getEmail());
-            throw new DuplicateEmailException("Email already registered: " + request.getEmail());
-        }
+        java.util.Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
+        User user;
 
-        User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .mobileNumber(request.getMobileNumber())
-                .role(Role.CUSTOMER)
-                .active(false)
-                .build();
+        if (existingUser.isPresent()) {
+            user = existingUser.get();
+            if (user.isActive()) {
+                log.warn("Registration failed - email already active: {}", request.getEmail());
+                throw new DuplicateEmailException("Email already registered: " + request.getEmail());
+            }
+            log.info("User already exists but is unverified (pending activation). Updating info and sending new OTP: {}", request.getEmail());
+            user.setFullName(request.getFullName());
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setMobileNumber(request.getMobileNumber());
+        } else {
+            user = User.builder()
+                    .fullName(request.getFullName())
+                    .email(request.getEmail())
+                    .password(passwordEncoder.encode(request.getPassword()))
+                    .mobileNumber(request.getMobileNumber())
+                    .role(Role.CUSTOMER)
+                    .active(false)
+                    .build();
+        }
 
         user = userRepository.save(user);
 
@@ -99,9 +109,9 @@ public class AuthServiceImpl implements AuthService {
                 });
 
         if (!user.isActive()) {
-            log.warn("Login attempt by unverified user: {}", request.getEmail());
+            log.warn("Login attempt by inactive or deactivated user: {}", request.getEmail());
             throw new InactiveUserException(
-                    "Your account is not yet verified. Please verify your OTP first.");
+                    "Your account is deactivated. Please contact support or admin.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {

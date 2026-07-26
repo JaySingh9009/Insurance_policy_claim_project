@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Set;
 
+import com.insurance.demo.repository.ClaimRepository;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -31,6 +33,7 @@ public class UserServiceImpl implements UserService {
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("fullName", "email", "createdAt", "role");
 
     private final UserRepository userRepository;
+    private final ClaimRepository claimRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -112,7 +115,24 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
     }
 
+    private static final Set<com.insurance.demo.enums.ClaimStatus> AGENT_ACTIVE_STATUSES = Set.of(
+            com.insurance.demo.enums.ClaimStatus.SUBMITTED,
+            com.insurance.demo.enums.ClaimStatus.UNDER_REVIEW
+    );
+
     private UserResponse mapToResponse(User u) {
-        return new UserResponse(u.getId(), u.getFullName(), u.getEmail(), u.getMobileNumber(), u.getRole(), u.isActive());
+        long activeTaskCount = 0;
+        if (u.getRole() == Role.AGENT) {
+            activeTaskCount = claimRepository.countByAssignedAgentIdAndStatusIn(u.getId(), AGENT_ACTIVE_STATUSES);
+        }
+        return UserResponse.builder()
+                .id(u.getId())
+                .fullName(u.getFullName())
+                .email(u.getEmail())
+                .mobileNumber(u.getMobileNumber())
+                .role(u.getRole())
+                .active(u.isActive())
+                .activeTaskCount(activeTaskCount)
+                .build();
     }
 }

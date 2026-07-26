@@ -83,15 +83,7 @@ public class PolicyController {
                         sortDir));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
-    @GetMapping("/{id}")
-    @Operation(summary = "Get policy by ID")
-    public ResponseEntity<PolicyResponse> getPolicyById(
-            @PathVariable Long id) {
 
-        return ResponseEntity.ok(
-                policyService.getPolicyById(id));
-    }
 
 
     

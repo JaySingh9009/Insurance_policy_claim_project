@@ -15,7 +15,6 @@ public class PolicyPlanResponse {
     private Double coverageAmount;
     private Double premiumAmount;
     private String premiumType;
-    private java.util.Set<String> allowedPremiumTypes;
     private Integer durationInYears;
     private String termsAndConditions;
     private boolean active;

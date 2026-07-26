@@ -33,10 +33,13 @@ public class UserController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/agents")
-    @Operation(summary = "Get all agents list (Admin only)")
+    @Operation(summary = "Get active agents list (Admin only)")
     public ResponseEntity<java.util.List<UserResponse>> getAgents() {
         PagedResponse<UserResponse> page = userService.getAllUsers(0, 100, "fullName", "asc", com.insurance.demo.enums.Role.AGENT);
-        return ResponseEntity.ok(page.getRecords());
+        java.util.List<UserResponse> activeAgents = page.getRecords().stream()
+                .filter(UserResponse::isActive)
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(activeAgents);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -67,10 +70,5 @@ public class UserController {
         return ResponseEntity.ok(userService.deactivateUser(id, principal.getUser().getId()));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
-    @GetMapping("/{id}")
-    @Operation(summary = "Get user by ID (Admin only)")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.getUserById(id));
-    }
+
 }

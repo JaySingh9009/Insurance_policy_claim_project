@@ -22,5 +22,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
     boolean existsByPolicyPolicyIdAndStatusNotIn(Long policyId, List<ClaimStatus> statuses);
 
+    long countByAssignedAgentIdAndStatusIn(Long agentId, java.util.Collection<ClaimStatus> statuses);
+
 
 }
