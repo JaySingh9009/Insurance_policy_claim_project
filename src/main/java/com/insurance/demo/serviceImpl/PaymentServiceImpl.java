@@ -1,7 +1,17 @@
 package com.insurance.demo.serviceImpl;
 
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.insurance.demo.dto.PagedResponse;
-import com.insurance.demo.dto.PaymentRequest;
 import com.insurance.demo.dto.PaymentResponse;
 import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.Policy;
@@ -10,7 +20,6 @@ import com.insurance.demo.enums.PaymentStatus;
 import com.insurance.demo.enums.PolicyStatus;
 import com.insurance.demo.enums.PremiumType;
 import com.insurance.demo.exception.BadRequestException;
-import java.time.LocalDate;
 import com.insurance.demo.exception.DuplicateResourceException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.exception.UnauthorizedAccessException;
@@ -19,17 +28,9 @@ import com.insurance.demo.repository.PaymentRepository;
 import com.insurance.demo.repository.PolicyRepository;
 import com.insurance.demo.service.PaymentService;
 import com.insurance.demo.util.PaginationValidator;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -140,7 +141,10 @@ public class PaymentServiceImpl implements PaymentService {
                 ? policy.getCustomer().getUser().getFullName() : "Valued Customer";
         String customerEmail = policy.getCustomer() != null && policy.getCustomer().getUser() != null
                 ? policy.getCustomer().getUser().getEmail() : "customer@insurance.com";
-
+        
+       
+        
+    
         return com.insurance.demo.dto.RazorpayOrderResponse.builder()
                 .orderId(orderId)
                 .amount(payableAmount)
@@ -185,12 +189,16 @@ public class PaymentServiceImpl implements PaymentService {
         Double paidAmount = request.getAmount() != null && request.getAmount() > 0
                 ? request.getAmount()
                 : (policy.getInstallmentAmount() != null ? policy.getInstallmentAmount() : policy.getPlan().getPremiumAmount());
-
+        
+        
         com.insurance.demo.enums.PaymentMethod method;
         try {
+        	
             method = com.insurance.demo.enums.PaymentMethod.valueOf(
                     request.getPaymentMethod() != null ? request.getPaymentMethod().toUpperCase() : "UPI"
             );
+            
+            
         } catch (IllegalArgumentException e) {
             method = com.insurance.demo.enums.PaymentMethod.UPI;
         }
@@ -239,6 +247,8 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Razorpay Payment VERIFIED & SUCCESS: {} for policy {} (Status: ACTIVE, Next Due: {})",
                 request.getRazorpayPaymentId(), policy.getPolicyNumber(), nextDue);
 
+        log.info("Razorpay Payment VERIFIED & SUCCESS: {} for policy {} (Status: ACTIVE, Next Due: {})",
+                payment);
          return mapToResponse(payment);
     }
 }

@@ -79,7 +79,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", message));
     }
 
-    @PostMapping({"/verify-forgot-password-otp", "/verify-reset-otp"})
+    @PostMapping({"/verify-reset-otp"})
     @Operation(
         summary = "Step 2 – Verify password reset OTP",
         description = "OTP verify karo. Successful hone par Step 3 ke liye aage badho."

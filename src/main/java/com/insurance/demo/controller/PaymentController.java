@@ -1,20 +1,29 @@
 package com.insurance.demo.controller;
 
+
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.insurance.demo.dto.PagedResponse;
-import com.insurance.demo.dto.PaymentRequest;
 import com.insurance.demo.dto.PaymentResponse;
 import com.insurance.demo.security.CustomUserDetails;
 import com.insurance.demo.service.PaymentService;
+import com.insurance.demo.serviceImpl.PaymentServiceImpl;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
-
+import lombok.extern.slf4j.Slf4j;
+@Slf4j
 @RestController
 @RequestMapping("/api/payments")
 @RequiredArgsConstructor
@@ -37,6 +46,7 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> verifyRazorpayPayment(
             @Valid @RequestBody com.insurance.demo.dto.VerifyRazorpayPaymentRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
+    	log.info("Request {}", request);
         String role = principal.getUser().getRole().name();
         return ResponseEntity.ok(paymentService.verifyRazorpayPayment(request, principal.getUser().getId(), role));
     }

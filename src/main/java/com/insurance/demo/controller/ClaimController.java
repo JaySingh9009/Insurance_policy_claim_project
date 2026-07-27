@@ -70,7 +70,7 @@ public class ClaimController {
 
 
     @PreAuthorize("hasRole('ADMIN')")
-    @RequestMapping(value = {"/{id}/decision", "/{id}/decide"}, method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
+    @RequestMapping(value = {"/{id}/decide"}, method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
     @Operation(summary = "Admin makes final APPROVED or REJECTED decision")
     public ResponseEntity<ClaimResponse> makeDecision(
             @PathVariable Long id,

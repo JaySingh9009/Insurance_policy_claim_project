@@ -31,7 +31,10 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final OtpService otpService;
-
+    
+    
+    
+//Registration implementation
     @Override
     @Transactional
     public String register(RegisterRequest request) {
@@ -75,6 +78,7 @@ public class AuthServiceImpl implements AuthService {
                 + destination + ". Please verify to activate your account.";
     }
 
+//After register Otp verification
     @Override
     @Transactional
     public UserResponse verifyOtp(VerifyOtpRequest request) {
@@ -98,6 +102,8 @@ public class AuthServiceImpl implements AuthService {
         return mapToUserResponse(user);
     }
 
+    
+//Login 
     @Override
     public LoginResponse login(LoginRequest request) {
         log.info("Login attempt for: {}", request.getEmail());
@@ -125,6 +131,8 @@ public class AuthServiceImpl implements AuthService {
         return new LoginResponse(token, user.getEmail(), user.getRole().name());
     }
 
+    
+//Mapping user response after verifying otp
     private UserResponse mapToUserResponse(User user) {
         return new UserResponse(
                 user.getId(),

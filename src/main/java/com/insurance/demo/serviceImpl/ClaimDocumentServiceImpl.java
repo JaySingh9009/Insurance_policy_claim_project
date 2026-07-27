@@ -40,7 +40,9 @@ public class ClaimDocumentServiceImpl implements ClaimDocumentService {
             "MEDICAL_REPORT", "POLICE_FIR", "HOSPITAL_BILL", "DEATH_CERTIFICATE",
             "INSURANCE_POLICY", "ID_PROOF", "CLAIM_FORM", "OTHER"
     );
-
+    
+    
+//
     @Override
     public FileUploadResponse preUploadDocument(String documentName, String documentType, MultipartFile file) {
         log.info("Pre-uploading document '{}' (type={}) to Cloudinary", documentName, documentType);
