@@ -22,7 +22,8 @@ public class EmailService {
     // ── Existing method: Registration OTP ──────────────────────────────────
     public void sendOtp(String toEmail, String otp) {
         if (!StringUtils.hasText(fromEmail)) {
-            throw new IllegalStateException("Email service is not configured. Please set spring.mail.username.");
+            log.warn("Email service is not configured (spring.mail.username is empty). DEV OTP for {}: {}", toEmail, otp);
+            return;
         }
 
         try {
@@ -49,16 +50,15 @@ public class EmailService {
             }
             log.error("Failed to send OTP email to {}. Root cause: {} - {}",
                     toEmail, rootCause.getClass().getSimpleName(), rootCause.getMessage());
-            throw new IllegalStateException(
-                    "Unable to send OTP email. Root cause: " +
-                    rootCause.getClass().getSimpleName() + " - " + rootCause.getMessage(), ex);
+            log.warn(">>> DEV/OFFLINE FALLBACK: Email send failed (SMTP/Network offline). Use OTP: {} for email: {} <<<", otp, toEmail);
         }
     }
 
     // ── NEW method: Forgot Password OTP ────────────────────────────────────
     public void sendPasswordResetOtp(String toEmail, String otp) {
         if (!StringUtils.hasText(fromEmail)) {
-            throw new IllegalStateException("Email service is not configured. Please set spring.mail.username.");
+            log.warn("Email service is not configured (spring.mail.username is empty). DEV OTP for {}: {}", toEmail, otp);
+            return;
         }
 
         try {
@@ -87,9 +87,7 @@ public class EmailService {
             }
             log.error("Failed to send password reset OTP to {}. Root cause: {} - {}",
                     toEmail, rootCause.getClass().getSimpleName(), rootCause.getMessage());
-            throw new IllegalStateException(
-                    "Unable to send password reset OTP. Root cause: " +
-                    rootCause.getClass().getSimpleName() + " - " + rootCause.getMessage(), ex);
+            log.warn(">>> DEV/OFFLINE FALLBACK: Password reset email send failed (SMTP/Network offline). Use OTP: {} for email: {} <<<", otp, toEmail);
         }
     }
 }

@@ -38,8 +38,8 @@ public class PolicyPlan {
     @Column(nullable = false)
     private PremiumType premiumType;
 
-    @Column(nullable = false)
-    private Integer durationInYears;
+    @Column(name = "duration", nullable = false)
+    private Integer duration;
 
     @Column(length = 2000)
     private String termsAndConditions;

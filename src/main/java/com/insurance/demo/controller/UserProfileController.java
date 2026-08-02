@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserProfileController {
 
     @GetMapping("/profile")
-    @Operation(summary = "Get current user profile (Admin/Agent/Customer)")
+    @Operation(summary = "Get current user profile (Admin/Officer/Customer)")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal CustomUserDetails principal) {
         if (principal == null || principal.getUser() == null) {
             return ResponseEntity.badRequest().build();

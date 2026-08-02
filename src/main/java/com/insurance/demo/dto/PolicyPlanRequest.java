@@ -33,16 +33,18 @@ public class PolicyPlanRequest {
     @NotBlank(message = "Premium type is required")
     @Pattern(
         regexp = "(?i)ONE_TIME|MONTHLY|QUARTERLY|SEMI_ANNUAL|ANNUAL",
-        message = "Premium type must be ONE_TIME, MONTHLY, QUARTERLY, SEMI_ANNUAL, or ANNUAL"
+        message = "Premium type must be ONE_TIME for Travel,  ANNUAL for rest of Products"
     )
     private String premiumType;
 
     @NotNull(message = "Duration is required")
-    @Min(value = 1, message = "Duration must be at least 1 year")
-    @Max(value = 40, message = "Duration must not exceed 40 years")
-    private Integer durationInYears;
+    @Min(value = 1, message = "Duration must be at least 1")
+    @Max(value = 365, message = "Duration must not exceed 365 (years for standard plans; days for Travel plans)")
+    private Integer duration;
 
     @NotBlank(message = "Terms and conditions are required")
     @Size(min = 20, max = 2000, message = "Terms and conditions must be between 20 and 2000 characters")
     private String termsAndConditions;
+
+	
 }

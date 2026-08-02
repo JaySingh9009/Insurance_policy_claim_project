@@ -98,13 +98,18 @@ public class ClaimServiceImpl implements ClaimService {
                 .mapToDouble(Claim::getClaimAmount)
                 .sum();
 
-        if (totalPreviousClaimed + request.getClaimAmount() > policy.getPlan().getCoverageAmount()) {
-            double remainingCoverage = Math.max(0.0, policy.getPlan().getCoverageAmount() - totalPreviousClaimed);
-            log.warn("Total claimed amount ({}) + new claim ({}) exceeds policy coverage ({})", 
-                    totalPreviousClaimed, request.getClaimAmount(), policy.getPlan().getCoverageAmount());
+        // Effective coverage limit: IDV amount for MOTOR policies (if present), else plan coverage amount
+        double maxCoverageLimit = (policy.getIdvAmount() != null && policy.getIdvAmount() > 0)
+                ? policy.getIdvAmount()
+                : policy.getPlan().getCoverageAmount();
+
+        if (totalPreviousClaimed + request.getClaimAmount() > maxCoverageLimit) {
+            double remainingCoverage = Math.max(0.0, maxCoverageLimit - totalPreviousClaimed);
+            log.warn("Total claimed amount ({}) + new claim ({}) exceeds maximum policy limit ({})", 
+                    totalPreviousClaimed, request.getClaimAmount(), maxCoverageLimit);
             throw new ClaimAmountExceededException(
-                    "Total claimed amount would exceed the policy coverage limit. Remaining coverage: " + remainingCoverage + 
-                    " (Coverage: " + policy.getPlan().getCoverageAmount() + ", Previously claimed: " + totalPreviousClaimed + ")");
+                    "Total claimed amount would exceed the policy limit. Remaining claimable limit: " + remainingCoverage + 
+                    " (Maximum Limit: " + maxCoverageLimit + ", Previously claimed: " + totalPreviousClaimed + ")");
         }
 
         // Cannot raise a second active claim (enhancement per spec)
@@ -126,6 +131,7 @@ public class ClaimServiceImpl implements ClaimService {
                 .claimAmount(request.getClaimAmount())
                 .claimReason(request.getClaimReason())
                 .incidentDate(request.getIncidentDate())
+                .claimCategory(request.getClaimCategory())
                 .status(ClaimStatus.SUBMITTED)
                 .build();
 
@@ -143,29 +149,28 @@ public class ClaimServiceImpl implements ClaimService {
         return mapToResponse(savedClaim);
     }
 
-    // ─── Agent Status Update ───────────────────────────────────────────────────
+    // ─── Insurance Officer Status Update ───────────────────────────────────────────────────
 
     @Override
     @Transactional
-    public ClaimResponse updateClaimStatus(Long claimId, AgentRemarkRequest request, Long agentUserId) {
-        log.info("Agent userId={} updating claimId={} to status={}", agentUserId, claimId, request.getTargetStatus());
+    public ClaimResponse updateOfficerClaimStatus(Long claimId, OfficerRemarkRequest request, Long officerUserId) {
+        log.info("Officer userId={} updating claimId={} to status={}", officerUserId, claimId, request.getTargetStatus());
 
         Claim claim = findClaim(claimId);
-        User agent = findUser(agentUserId);
+        User officer = findUser(officerUserId);
 
-        if (claim.getAssignedAgent() == null) {
+        if (claim.getAssignedOfficer() == null) {
             throw new BadRequestException("This claim has not been assigned to any insurance officer yet. Only the assigned officer can review or recommend it.");
         }
 
-        if (!claim.getAssignedAgent().getId().equals(agentUserId)) {
-            throw new BadRequestException("You are not assigned to this claim. Only the assigned officer (" 
-                    + claim.getAssignedAgent().getFullName() + ") can review or recommend it.");
+        if (!claim.getAssignedOfficer().getId().equals(officerUserId)) {
+            throw new UnauthorizedAccessException("Only the assigned insurance officer (" 
+                    + claim.getAssignedOfficer().getFullName() + ") can review or recommend it.");
         }
 
         ClaimStatus targetStatus = parseStatus(request.getTargetStatus());
 
-
-        validateAgentTransition(claim.getStatus(), targetStatus);
+        validateOfficerTransition(claim.getStatus(), targetStatus);
 
         ClaimStatus previousStatus = claim.getStatus();
 
@@ -173,16 +178,16 @@ public class ClaimServiceImpl implements ClaimService {
             claim.setStatus(ClaimStatus.UNDER_REVIEW);
         } else if (targetStatus == ClaimStatus.RECOMMENDED_APPROVAL) {
             claim.setStatus(ClaimStatus.RECOMMENDED_APPROVAL);
-            claim.setAgentRemarks(request.getRemarks());
+            claim.setOfficerRemarks(request.getRemarks());
         } else if (targetStatus == ClaimStatus.RECOMMENDED_REJECTION) {
             claim.setStatus(ClaimStatus.RECOMMENDED_REJECTION);
-            claim.setAgentRemarks(request.getRemarks());
+            claim.setOfficerRemarks(request.getRemarks());
         }
 
         claimRepository.save(claim);
-        saveHistory(claim, previousStatus, targetStatus, request.getRemarks(), agent);
+        saveHistory(claim, previousStatus, targetStatus, request.getRemarks(), officer);
 
-        log.info("Claim {} updated from {} to {} by agent {}", claimId, previousStatus, targetStatus, agentUserId);
+        log.info("Claim {} updated from {} to {} by officer {}", claimId, previousStatus, targetStatus, officerUserId);
         return mapToResponse(claim);
     }
 
@@ -244,7 +249,7 @@ public class ClaimServiceImpl implements ClaimService {
 
 
 
-    private void validateAgentTransition(ClaimStatus current, ClaimStatus target) {
+    private void validateOfficerTransition(ClaimStatus current, ClaimStatus target) {
         boolean valid = false;
         if (current == ClaimStatus.SUBMITTED) {
             valid = (target == ClaimStatus.UNDER_REVIEW);
@@ -253,7 +258,7 @@ public class ClaimServiceImpl implements ClaimService {
         }
         if (!valid) {
             throw new InvalidClaimStatusTransitionException(
-                    "Agent cannot transition claim from " + current + " to " + target);
+                    "Insurance Officer cannot transition claim from " + current + " to " + target);
         }
     }
 
@@ -325,35 +330,38 @@ public class ClaimServiceImpl implements ClaimService {
 
     @Override
     @Transactional
-    public ClaimResponse assignAgent(Long claimId, Long agentId) {
-        log.info("Admin assigning agentId={} to claimId={}", agentId, claimId);
+    public ClaimResponse assignOfficer(Long claimId, Long officerId) {
+        log.info("Admin assigning officerId={} to claimId={}", officerId, claimId);
         Claim claim = findClaim(claimId);
-        User agent = findUser(agentId);
+        User officer = findUser(officerId);
 
-        if (agent.getRole() != com.insurance.demo.enums.Role.AGENT) {
-            throw new BadRequestException("User with ID " + agentId + " is not an AGENT");
+        if (officer.getRole() != com.insurance.demo.enums.Role.OFFICER) {
+            throw new BadRequestException("User with ID " + officerId + " is not an Insurance Officer");
         }
 
-        claim.setAssignedAgent(agent);
+        claim.setAssignedOfficer(officer);
         claimRepository.save(claim);
 
         // Record history
-        saveHistory(claim, claim.getStatus(), claim.getStatus(), "Claim assigned to agent: " + agent.getFullName(), null);
+        saveHistory(claim, claim.getStatus(), claim.getStatus(), "Claim assigned to Insurance Officer: " + officer.getFullName(), null);
 
-        log.info("Claim {} successfully assigned to agent {}", claimId, agentId);
+        log.info("Claim {} successfully assigned to officer {}", claimId, officerId);
         return mapToResponse(claim);
     }
 
-    private static final Set<ClaimStatus> AGENT_ACTIVE_STATUSES = Set.of(
+    private static final Set<ClaimStatus> OFFICER_ACTIVE_STATUSES = Set.of(
             ClaimStatus.SUBMITTED,
             ClaimStatus.UNDER_REVIEW
     );
 
     private ClaimResponse mapToResponse(Claim c) {
-        Long agentId = c.getAssignedAgent() != null ? c.getAssignedAgent().getId() : null;
-        Long activeTaskCount = agentId != null
-                ? claimRepository.countByAssignedAgentIdAndStatusIn(agentId, AGENT_ACTIVE_STATUSES)
+        Long officerId = c.getAssignedOfficer() != null ? c.getAssignedOfficer().getId() : null;
+        Long activeTaskCount = officerId != null
+                ? claimRepository.countByAssignedOfficerIdAndStatusIn(officerId, OFFICER_ACTIVE_STATUSES)
                 : null;
+
+        String remarks = c.getOfficerRemarks();
+        String officerName = c.getAssignedOfficer() != null ? c.getAssignedOfficer().getFullName() : null;
 
         return ClaimResponse.builder()
                 .claimId(c.getClaimId())
@@ -364,12 +372,13 @@ public class ClaimServiceImpl implements ClaimService {
                 .claimReason(c.getClaimReason())
                 .incidentDate(c.getIncidentDate())
                 .status(c.getStatus().name())
-                .agentRemarks(c.getAgentRemarks())
+                .officerRemarks(remarks)
                 .adminRemarks(c.getAdminRemarks())
                 .customerName(c.getPolicy().getCustomer().getUser().getFullName())
-                .assignedAgentId(agentId)
-                .assignedAgentName(c.getAssignedAgent() != null ? c.getAssignedAgent().getFullName() : null)
-                .assignedAgentActiveTaskCount(activeTaskCount)
+                .assignedOfficerId(officerId)
+                .assignedOfficerName(officerName)
+                .assignedOfficerActiveTaskCount(activeTaskCount)
+                .claimCategory(c.getClaimCategory())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

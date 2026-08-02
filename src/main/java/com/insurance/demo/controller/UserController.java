@@ -1,6 +1,6 @@
 package com.insurance.demo.controller;
 
-import com.insurance.demo.dto.CreateAgentRequest;
+
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.UserResponse;
 import com.insurance.demo.security.CustomUserDetails;
@@ -24,22 +24,21 @@ public class UserController {
     private final UserService userService;
 
     @PreAuthorize("hasRole('ADMIN')")
-    @PostMapping("/agents")
-    @Operation(summary = "Create a new agent (Admin only)")
-    public ResponseEntity<UserResponse> createAgent(
-            @Valid @RequestBody CreateAgentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createAgent(request));
+    @PostMapping("/officers")
+    @Operation(summary = "Create a new Insurance Officer (Admin only)")
+    public ResponseEntity<UserResponse> createOfficer(
+            @Valid @RequestBody com.insurance.demo.dto.CreateOfficerRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createOfficer(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
-    @GetMapping("/agents")
-    @Operation(summary = "Get active agents list (Admin only)")
-    public ResponseEntity<java.util.List<UserResponse>> getAgents() {
-        PagedResponse<UserResponse> page = userService.getAllUsers(0, 100, "fullName", "asc", com.insurance.demo.enums.Role.AGENT);
-        java.util.List<UserResponse> activeAgents = page.getRecords().stream()
+    @GetMapping("/officers")
+    @Operation(summary = "Get active Insurance Officers list (Admin only)")
+    public ResponseEntity<java.util.List<UserResponse>> getOfficers() {
+        PagedResponse<UserResponse> page = userService.getAllUsers(0, 100, "fullName", "asc", com.insurance.demo.enums.Role.OFFICER);
+        java.util.List<UserResponse> activeOfficers = page.getRecords().stream()
                 .filter(UserResponse::isActive)
                 .collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(activeAgents);
+        return ResponseEntity.ok(activeOfficers);
     }
 
     @PreAuthorize("hasRole('ADMIN')")

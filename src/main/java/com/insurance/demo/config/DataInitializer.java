@@ -43,22 +43,17 @@ public class DataInitializer
         }
 
      
-        if (!userRepository.existsByEmail(
-                "agent@gmail.com")) {
-
-            User agent =
-                    User.builder()
-                    .fullName("Insurance Agent")
-                    .email("agent@gmail.com")
-                    .password(
-                            passwordEncoder.encode(
-                                    "agent123"))
+        if (!userRepository.existsByEmail("officer@gmail.com") && !userRepository.existsByEmail("agent@gmail.com")) {
+            User officer = User.builder()
+                    .fullName("Insurance Officer")
+                    .email("officer@gmail.com")
+                    .password(passwordEncoder.encode("officer123"))
                     .mobileNumber("8888888888")
-                    .role(Role.AGENT)
+                    .role(Role.OFFICER)
                     .active(true)
                     .build();
 
-            userRepository.save(agent);
+            userRepository.save(officer);
         }
     }
 }

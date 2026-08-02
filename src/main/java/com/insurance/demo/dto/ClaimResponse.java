@@ -19,12 +19,13 @@ public class ClaimResponse {
     private String claimReason;
     private LocalDate incidentDate;
     private String status;
-    private String agentRemarks;
+    private String officerRemarks;
     private String adminRemarks;
     private String customerName;
-    private Long assignedAgentId;
-    private String assignedAgentName;
-    private Long assignedAgentActiveTaskCount;
+    private Long assignedOfficerId;
+    private String assignedOfficerName;
+    private Long assignedOfficerActiveTaskCount;
+    private String claimCategory;  // Motor-specific: ACCIDENT, THEFT, FIRE, NATURAL_CALAMITY, BREAKDOWN, OTHER
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

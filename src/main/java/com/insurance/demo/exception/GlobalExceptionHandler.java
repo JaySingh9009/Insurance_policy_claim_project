@@ -156,12 +156,23 @@ public class GlobalExceptionHandler {
 
 
 
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+    public ResponseEntity<ApiErrorResponse> handleDatabaseError(
+            org.springframework.dao.DataAccessException ex, HttpServletRequest request) {
+        log.error("Database error at {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+        String causeMsg = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
+                "Database error: " + causeMsg, request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneral(
             Exception ex, HttpServletRequest request) {
         log.error("Unhandled exception at {}: {}", request.getRequestURI(), ex.getMessage(), ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
-                "An unexpected error occurred. Please try again later.", request);
+        String msg = (ex.getMessage() != null && !ex.getMessage().isBlank())
+                ? ex.getMessage()
+                : "An unexpected error occurred. Please try again later.";
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", msg, request);
     }
 
 

@@ -6,6 +6,7 @@ import com.insurance.demo.dto.PolicyPlanResponse;
 import com.insurance.demo.entity.InsuranceProduct;
 import com.insurance.demo.entity.PolicyPlan;
 import com.insurance.demo.enums.PremiumType;
+import com.insurance.demo.enums.ProductType;
 import com.insurance.demo.exception.BadRequestException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.PolicyPlanRepository;
@@ -51,6 +52,15 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
         }
 
         PremiumType premiumType = parsePremiumType(request.getPremiumType());
+        if (product.getProductType() == ProductType.TRAVEL) {
+            if (premiumType != PremiumType.ONE_TIME) {
+                throw new BadRequestException("Travel policy plans must have premiumType set to ONE_TIME");
+            }
+        } else {
+            if (premiumType != PremiumType.ANNUAL) {
+                throw new BadRequestException("Health, Motor, and Life policy plans must have premiumType set to ANNUAL");
+            }
+        }
 
         PolicyPlan plan = PolicyPlan.builder()
                 .product(product)
@@ -58,7 +68,7 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
                 .coverageAmount(request.getCoverageAmount())
                 .premiumAmount(request.getPremiumAmount())
                 .premiumType(premiumType)
-                .durationInYears(request.getDurationInYears())
+                .duration(request.getDuration())
                 .termsAndConditions(request.getTermsAndConditions())
                 .active(true)
                 .build();
@@ -134,11 +144,12 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
                 .coverageAmount(p.getCoverageAmount())
                 .premiumAmount(p.getPremiumAmount())
                 .premiumType(p.getPremiumType() != null ? p.getPremiumType().name() : "ANNUAL")
-                .durationInYears(p.getDurationInYears())
+                .duration(p.getDuration())
                 .termsAndConditions(p.getTermsAndConditions())
                 .active(p.isActive())
                 .productId(p.getProduct().getProductId())
                 .productName(p.getProduct().getProductName())
+                .productType(p.getProduct().getProductType() != null ? p.getProduct().getProductType().name() : null)
                 .createdAt(p.getCreatedAt())
                 .build();
     }

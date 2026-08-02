@@ -15,10 +15,11 @@ public class PolicyPlanResponse {
     private Double coverageAmount;
     private Double premiumAmount;
     private String premiumType;
-    private Integer durationInYears;
+    private Integer duration;
     private String termsAndConditions;
     private boolean active;
     private Long productId;
     private String productName;
+    private String productType;   // e.g. "TRAVEL", "HEALTH", "LIFE", "MOTOR"
     private LocalDateTime createdAt;
 }

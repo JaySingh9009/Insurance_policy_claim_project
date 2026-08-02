@@ -42,14 +42,17 @@ public class Claim {
     @Column(nullable = false)
     private ClaimStatus status;
 
-    private String agentRemarks;
+    private String officerRemarks;
 
     private String adminRemarks;
 
+    // ── Motor-specific: claim category (null for non-MOTOR claims) ────────────
+    @Column
+    private String claimCategory;  // "ACCIDENT", "THEFT", "FIRE", "NATURAL_CALAMITY", "BREAKDOWN", "OTHER"
 
     @ManyToOne
-    @JoinColumn(name = "assigned_agent_id")
-    private User assignedAgent;
+    @JoinColumn(name = "assigned_officer_id")
+    private User assignedOfficer;
 
     @CreationTimestamp
     @Column(updatable = false)

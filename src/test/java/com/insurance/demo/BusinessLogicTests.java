@@ -198,7 +198,7 @@
 //        PaymentRequest request = new PaymentRequest();
 //        request.setPolicyId(50L);
 //        request.setAmount(1000.0); // health plan premium is 2000.0
-//        request.setPaymentMode(PaymentMethod.CREDIT_CARD);
+//        request.setPaymentMode(PaymentMethod.RAZORPAY);
 //        request.setTransactionReference("REF123");
 //        request.setPaymentStatus(PaymentStatus.SUCCESS);
 //
@@ -213,7 +213,7 @@
 //        PaymentRequest request = new PaymentRequest();
 //        request.setPolicyId(50L);
 //        request.setAmount(2000.0);
-//        request.setPaymentMode(PaymentMethod.CREDIT_CARD);
+//        request.setPaymentMode(PaymentMethod.RAZORPAY);
 //        request.setTransactionReference("REF123");
 //        request.setPaymentStatus(PaymentStatus.SUCCESS);
 //

@@ -1,6 +1,7 @@
 package com.insurance.demo.serviceImpl;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 
@@ -18,7 +19,9 @@ import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.Policy;
 import com.insurance.demo.entity.PolicyPlan;
 import com.insurance.demo.enums.PolicyStatus;
+import com.insurance.demo.enums.PremiumType;
 import com.insurance.demo.enums.ProductType;
+import com.insurance.demo.enums.Role;
 import com.insurance.demo.exception.BadRequestException;
 import com.insurance.demo.exception.InvalidPolicyStatusException;
 import com.insurance.demo.exception.ResourceNotFoundException;
@@ -31,6 +34,7 @@ import com.insurance.demo.repository.PolicyRepository;
 import com.insurance.demo.service.PolicyService;
 import com.insurance.demo.util.NumberGenerator;
 import com.insurance.demo.util.PaginationValidator;
+import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class PolicyServiceImpl implements PolicyService {
 
 	private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("createdAt", "status", "startDate", "endDate");
@@ -48,6 +53,7 @@ public class PolicyServiceImpl implements PolicyService {
 	private final ClaimRepository claimRepository;
 
 	@Override
+	@Transactional
 	public PolicyResponse purchasePolicy(PurchasePolicyRequest request, Long userId) {
 
 		log.info("Customer userId={} purchasing policy for planId={}", userId, request.getPlanId());
@@ -57,34 +63,84 @@ public class PolicyServiceImpl implements PolicyService {
 
 		PolicyPlan plan = findActivePlan(request.getPlanId());
 
-		validateNoDuplicatePolicy(customer, plan);
+		ProductType productType = plan.getProduct().getProductType();
 
-		LocalDate startDate = (request.getStartDate() != null) ? request.getStartDate() : LocalDate.now();
-		if (startDate.isBefore(LocalDate.now())) {
-			throw new BadRequestException("Start date cannot be in the past");
+		LocalDate startDate;
+		LocalDate endDate;
+		PremiumType selectedType;
+
+		if (productType == ProductType.TRAVEL) {
+			// TRAVEL: customer must supply both departure date and return date
+			if (request.getStartDate() == null || request.getEndDate() == null) {
+				throw new BadRequestException("Travel policies require both a departure date (startDate) and a return date (endDate).");
+			}
+			startDate = request.getStartDate();
+			endDate   = request.getEndDate();
+			if (startDate.isBefore(LocalDate.now())) {
+				throw new BadRequestException("Departure date cannot be in the past.");
+			}
+			if (!endDate.isAfter(startDate)) {
+				throw new BadRequestException("Return date must be after the departure date.");
+			}
+			long tripDays = ChronoUnit.DAYS.between(startDate, endDate);
+			if (tripDays > plan.getDuration()) {
+				throw new BadRequestException(
+					"Trip duration of " + tripDays + " day(s) exceeds the maximum allowed " + plan.getDuration() + " day(s) for this plan.");
+			}
+			// Travel policies are always ONE_TIME (single trip, fixed dates)
+			selectedType = PremiumType.ONE_TIME;
+		} else if (productType == ProductType.MOTOR) {
+			startDate = (request.getStartDate() != null) ? request.getStartDate() : LocalDate.now();
+			if (startDate.isBefore(LocalDate.now())) {
+				throw new BadRequestException("Start date cannot be in the past");
+			}
+			endDate = startDate.plusYears(plan.getDuration());
+			selectedType = plan.getPremiumType();
+			if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
+				try {
+					selectedType = PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
+				} catch (IllegalArgumentException ignored) {}
+			}
+
+		} else {
+			// LIFE / HEALTH: existing logic unchanged
+			startDate = (request.getStartDate() != null) ? request.getStartDate() : LocalDate.now();
+			if (startDate.isBefore(LocalDate.now())) {
+				throw new BadRequestException("Start date cannot be in the past");
+			}
+			endDate = startDate.plusYears(plan.getDuration());
+			selectedType = plan.getPremiumType();
+			if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
+				try {
+					selectedType = PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
+				} catch (IllegalArgumentException ignored) {}
+			}
 		}
 
-		com.insurance.demo.enums.PremiumType selectedType = plan.getPremiumType();
-		if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
-			try {
-				selectedType = com.insurance.demo.enums.PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
-			} catch (IllegalArgumentException ignored) {}
-		}
+		validateNoDuplicatePolicy(customer, plan, startDate, endDate);
 
 		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType);
 
-		Policy policy = Policy.builder()
-				.policyNumber(NumberGenerator.generatePolicyNumber())
-				.customer(customer)
-				.plan(plan)
-				.selectedPremiumType(selectedType)
-				.installmentAmount(installment)
-				.startDate(startDate)
-				.endDate(startDate.plusYears(plan.getDurationInYears()))
-				.status(PolicyStatus.PENDING_PAYMENT) // always starts as PENDING_PAYMENT
-				.totalPremiumPaid(0.0)
-				.nextPaymentDueDate(startDate)
-				.build();
+		// ── For MOTOR: validate vehicle details and calculate IDV ────────────────
+		Double motorIdvAmount = null;
+		String motorVehicleRegNo = null;
+		String motorVehicleMakeModel = null;
+		Integer motorVehicleYear = null;
+		if (productType == ProductType.MOTOR) {
+			MotorVehicleData motorData = validateAndBuildMotorData(
+					request.getVehicleRegistrationNo(),
+					request.getVehicleMakeModel(),
+					request.getVehicleYear(),
+					plan.getCoverageAmount()
+			);
+			motorVehicleRegNo = motorData.regNo;
+			motorVehicleMakeModel = motorData.makeModel;
+			motorVehicleYear = motorData.year;
+			motorIdvAmount = motorData.idvAmount;
+		}
+
+		Policy policy = buildPolicyEntity(customer, plan, selectedType, startDate, endDate, installment,
+				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount);
 
 		policy = policyRepository.save(policy);
 
@@ -93,7 +149,11 @@ public class PolicyServiceImpl implements PolicyService {
 		return mapToResponse(policy);
 	}
 
+	
+//	-----------------------------------ISSUEPOLICY ON BEHALF OF CUSTOMER BY OFFICER---------------------------------
+
 	@Override
+	@Transactional
 	public PolicyResponse issuePolicy(IssuePolicyRequest request) {
 
 		log.info("Admin/Agent issuing policy for customerId={}, planId={}", request.getCustomerId(),
@@ -104,43 +164,86 @@ public class PolicyServiceImpl implements PolicyService {
 
 		PolicyPlan plan = findActivePlan(request.getPlanId());
 
-		validateNoDuplicatePolicy(customer, plan);
+		ProductType productType = plan.getProduct().getProductType();
 
-		LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+		LocalDate startDate;
+		LocalDate endDate;
+		PremiumType selectedType;
 
-		com.insurance.demo.enums.PremiumType selectedType = plan.getPremiumType();
-		if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
-			try {
-				selectedType = com.insurance.demo.enums.PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
-			} catch (IllegalArgumentException ignored) {}
+		if (productType == ProductType.TRAVEL) {
+			// TRAVEL issued by admin/agent: departure and return dates required
+			if (request.getStartDate() == null || request.getEndDate() == null) {
+				throw new BadRequestException("Travel policies require both a departure date (startDate) and a return date (endDate).");
+			}
+			startDate = request.getStartDate();
+			endDate   = request.getEndDate();
+			if (startDate.isBefore(LocalDate.now())) {
+				throw new BadRequestException("Departure date cannot be in the past.");
+			}
+			if (!endDate.isAfter(startDate)) {
+				throw new BadRequestException("Return date must be after the departure date.");
+			}
+			long tripDays = ChronoUnit.DAYS.between(startDate, endDate);
+			if (tripDays > plan.getDuration()) {
+				throw new BadRequestException(
+					"Trip duration of " + tripDays + " day(s) exceeds the maximum allowed " + plan.getDuration() + " day(s) for this plan.");
+			}
+			selectedType = PremiumType.ONE_TIME;
+		} else {
+			// LIFE / HEALTH / MOTOR
+			startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+			if (startDate.isBefore(LocalDate.now())) {
+				throw new BadRequestException("Start date cannot be in the past");
+			}
+			endDate = startDate.plusYears(plan.getDuration());
+			selectedType = plan.getPremiumType();
+			if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
+				try {
+					selectedType = PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
+				} catch (IllegalArgumentException ignored) {}
+			}
 		}
+
+		validateNoDuplicatePolicy(customer, plan, startDate, endDate);
 
 		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType);
 
-		Policy policy = Policy.builder()
-				.policyNumber(NumberGenerator.generatePolicyNumber())
-				.customer(customer)
-				.plan(plan)
-				.selectedPremiumType(selectedType)
-				.installmentAmount(installment)
-				.startDate(startDate)
-				.endDate(startDate.plusYears(plan.getDurationInYears()))
-				.status(PolicyStatus.PENDING_PAYMENT)
-				.totalPremiumPaid(0.0)
-				.nextPaymentDueDate(startDate)
-				.build();
+		// ── For MOTOR: validate vehicle details and calculate IDV ────────────────
+		Double motorIdvAmount = null;
+		String motorVehicleRegNo = null;
+		String motorVehicleMakeModel = null;
+		Integer motorVehicleYear = null;
+		if (productType == ProductType.MOTOR) {
+			MotorVehicleData motorData = validateAndBuildMotorData(
+					request.getVehicleRegistrationNo(),
+					request.getVehicleMakeModel(),
+					request.getVehicleYear(),
+					plan.getCoverageAmount()
+			);
+			motorVehicleRegNo = motorData.regNo;
+			motorVehicleMakeModel = motorData.makeModel;
+			motorVehicleYear = motorData.year;
+			motorIdvAmount = motorData.idvAmount;
+		}
+
+		Policy policy = buildPolicyEntity(customer, plan, selectedType, startDate, endDate, installment,
+				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount);
 
 		policy = policyRepository.save(policy);
 
 		return mapToResponse(policy);
 	}
+	
+
+//  ---------------------------------------------CANCEL POLICY ONLY FOR ADMIN---------------------------------------------------
 
 	@Override
+	@Transactional
 	public PolicyResponse cancelPolicy(Long policyId, Long requestingUserId, String role) {
 
 		Policy policy = findPolicy(policyId);
 
-		if ("CUSTOMER".equals(role)) {
+		if (Role.CUSTOMER.name().equalsIgnoreCase(role)) {
 
 			Customer customer = customerRepository
 					.findByUser_Id(requestingUserId)
@@ -179,12 +282,19 @@ public class PolicyServiceImpl implements PolicyService {
 
 		return mapToResponse(policy);
 	}
+	
+	
+
+//	----------------------------------------------------METHYOD FOR GET POLICY BY ID-------------------------------------------
 
 	@Override
 	public PolicyResponse getPolicyById(Long policyId) {
 
 		return mapToResponse(findPolicy(policyId));
 	}
+	
+	
+//	-----------------------------------------------------GET ALL POLICY IN PAGEABLE-----------------------------------------
 
 	@Override
 	public PagedResponse<PolicyResponse> getAllPolicies(int page, int size, String sortBy, String sortDir) {
@@ -197,6 +307,9 @@ public class PolicyServiceImpl implements PolicyService {
 
 		return toPagedResponse(policyPage);
 	}
+	
+	
+//	/-------------------------------------------GET MYPOLICIES FOR CUSTOMER---------------------------------------
 
 	@Override
 	public PagedResponse<PolicyResponse> getMyPolicies(Long userId, int page, int size, String sortBy, String sortDir) {
@@ -212,6 +325,9 @@ public class PolicyServiceImpl implements PolicyService {
 
 		return toPagedResponse(policyPage);
 	}
+	
+	
+//	-------------------------------------------------FINDACTIVE PLAN ----------------------------------------------
 
 	private PolicyPlan findActivePlan(Long planId) {
 
@@ -225,11 +341,14 @@ public class PolicyServiceImpl implements PolicyService {
 		return plan;
 	}
 
+//	---------------------------------------------FIND POLICY---------------------------------------------
 	private Policy findPolicy(Long policyId) {
 
 		return policyRepository.findById(policyId)
 				.orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + policyId));
 	}
+	
+//	--------------------------------------BUILD PAGABLE----------------------------------------------
 
 	private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
 
@@ -246,6 +365,10 @@ public class PolicyServiceImpl implements PolicyService {
 				.pageSize(policyPage.getSize()).totalRecords(policyPage.getTotalElements())
 				.totalPages(policyPage.getTotalPages()).isLastPage(policyPage.isLast()).build();
 	}
+	
+	
+	
+//	--------------------------------------------VALIDATION CHECK FOR DUPLICATE POLICY-------------------------------
 
 	/**
 	 * Stops a customer from holding more than one active/pending/lapsed policy
@@ -253,41 +376,87 @@ public class PolicyServiceImpl implements PolicyService {
 	 * products are exempt since customers may legitimately hold multiple
 	 * life policies.
 	 */
-	private void validateNoDuplicatePolicy(Customer customer, PolicyPlan plan) {
+	private void validateNoDuplicatePolicy(Customer customer, PolicyPlan plan, LocalDate startDate, LocalDate endDate) {
 		ProductType targetProductType = plan.getProduct().getProductType();
-		if (targetProductType != ProductType.LIFE) {
-			List<Policy> existingPolicies = policyRepository.findByCustomerCustomerId(customer.getCustomerId());
-			boolean hasDuplicate = existingPolicies.stream().anyMatch(p ->
-					p.getPlan().getProduct().getProductType() == targetProductType &&
-					(p.getStatus() == PolicyStatus.ACTIVE ||
-					 p.getStatus() == PolicyStatus.PENDING_PAYMENT ||
-					 p.getStatus() == PolicyStatus.LAPSED)
+
+		if (targetProductType == ProductType.TRAVEL) {
+			if (startDate != null && endDate != null) {
+				List<Policy> overlappingTravel = policyRepository.findOverlappingTravelPolicies(
+						customer.getCustomerId(),
+						startDate,
+						endDate,
+						List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
+				);
+				if (!overlappingTravel.isEmpty()) {
+					Policy existing = overlappingTravel.get(0);
+					throw new BadRequestException("Customer already has an active or pending travel policy ("
+							+ existing.getPolicyNumber() + ") covering trip dates from "
+							+ existing.getStartDate() + " to " + existing.getEndDate()
+							+ ". Overlapping travel insurance for the same dates is not allowed.");
+				}
+			}
+		} else if (targetProductType == ProductType.LIFE) {
+			// LIFE: Customer can hold multiple different LIFE plans, but cannot buy the exact same planId twice while active/pending/lapsed
+			boolean hasSameLifePlan = policyRepository.existsByCustomerCustomerIdAndPlanPlanIdAndStatusIn(
+					customer.getCustomerId(),
+					plan.getPlanId(),
+					List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
+			);
+			if (hasSameLifePlan) {
+				throw new BadRequestException("Customer already holds an active or pending policy for the plan '"
+						+ plan.getPlanName() + "'. You can purchase other Life Insurance plans, but cannot buy the exact same plan twice.");
+			}
+		} else if (targetProductType != ProductType.MOTOR) {
+			boolean hasDuplicate = policyRepository.existsByCustomerCustomerIdAndPlanProductProductTypeAndStatusIn(
+					customer.getCustomerId(),
+					targetProductType,
+					List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
 			);
 			if (hasDuplicate) {
 				throw new BadRequestException("Customer already has an active, pending, or lapsed policy for product type: "
-						+ targetProductType + ". Only multiple LIFE policies are allowed.");
+						+ targetProductType + ". Only multiple LIFE and MOTOR policies are allowed.");
 			}
 		}
 	}
+	
+//	---------------------------------------------CALCULATE INSTALMMENT -------------------------------------------
 
-	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, com.insurance.demo.enums.PremiumType type) {
+	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, PremiumType type) {
 		if (totalAnnualPremium == null) return 0.0;
-		if (type == com.insurance.demo.enums.PremiumType.MONTHLY) {
+		if (type == PremiumType.MONTHLY) {
 			return Math.round((totalAnnualPremium / 12.0) * 100.0) / 100.0;
-		} else if (type == com.insurance.demo.enums.PremiumType.QUARTERLY) {
-			return Math.round((totalAnnualPremium / 4.0) * 100.0) / 100.0;
-		} else if (type == com.insurance.demo.enums.PremiumType.SEMI_ANNUAL) {
-			return Math.round((totalAnnualPremium / 2.0) * 100.0) / 100.0;
-		} else if (type == com.insurance.demo.enums.PremiumType.ONE_TIME) {
-			int duration = (plan != null && plan.getDurationInYears() > 0) ? plan.getDurationInYears() : 1;
-			return Math.round((totalAnnualPremium * duration) * 100.0) / 100.0;
+		} else if (type == PremiumType.QUARTERLY) {
+			// 1.5% discount for Quarterly frequency
+			double discountedAnnual = totalAnnualPremium * 0.985;
+			return Math.round((discountedAnnual / 4.0) * 100.0) / 100.0;
+		} else if (type == PremiumType.SEMI_ANNUAL) {
+			// 3% discount for Semi-Annual frequency
+			double discountedAnnual = totalAnnualPremium * 0.97;
+			return Math.round((discountedAnnual / 2.0) * 100.0) / 100.0;
+		} else if (type == PremiumType.ANNUAL) {
+			// 5% discount for upfront Annual payment
+			double discountedAnnual = totalAnnualPremium * 0.95;
+			return Math.round(discountedAnnual * 100.0) / 100.0;
+		} else if (type == PremiumType.ONE_TIME) {
+			if (plan != null && plan.getProduct() != null && plan.getProduct().getProductType() == ProductType.TRAVEL) {
+				return Math.round(totalAnnualPremium * 100.0) / 100.0;
+			}
+			int duration = (plan != null && plan.getDuration() > 0) ? plan.getDuration() : 1;
+			// 10% discount for full term One-Time lump-sum payment
+			double discountedTotal = (totalAnnualPremium * duration) * 0.90;
+			return Math.round(discountedTotal * 100.0) / 100.0;
 		}
 		return totalAnnualPremium;
 	}
+	
+	
+//-------------------------------------------------	CHECK METHOD FOR LAPSED POLICY----------------------------------------
 
 	/**
 	 * If an ACTIVE policy's next payment is overdue beyond the Grace Period
 	 * (15 days for MONTHLY, 30 days for others), automatically flips status to LAPSED.
+	 * 
+	 * 
 	 */
 	private void checkAndSetLapsed(Policy p) {
 		if (p.getStatus() == PolicyStatus.ACTIVE && p.getNextPaymentDueDate() != null) {
@@ -299,26 +468,66 @@ public class PolicyServiceImpl implements PolicyService {
 			}
 		}
 	}
+	
+//	-----------------------------------------------CALCULATE IDV FOR MOTOR TYPE----------------------------------------------
 
+	private double calculateIDV(double baseCoverage, int vehicleAge) {
+		double factor;
+		if (vehicleAge < 1)      factor = 0.95;
+		else if (vehicleAge < 2) factor = 0.85;
+		else if (vehicleAge < 3) factor = 0.80;
+		else if (vehicleAge < 4) factor = 0.70;
+		else if (vehicleAge < 5) factor = 0.60;
+		else if (vehicleAge < 6) factor = 0.50;
+		else                     factor = 0.40; // 6-15 years
+		return Math.round(baseCoverage * factor * 100.0) / 100.0;
+	}
+	
+//----------------------------------------------POLICY RESPONSE----------------------------------------------------
 	private PolicyResponse mapToResponse(Policy p) {
-
-		checkAndSetLapsed(p);
 
 		String selectedType = (p.getSelectedPremiumType() != null)
 				? p.getSelectedPremiumType().name()
 				: (p.getPlan().getPremiumType() != null ? p.getPlan().getPremiumType().name() : "ANNUAL");
 
-		Double instAmount = (p.getInstallmentAmount() != null)
-				? p.getInstallmentAmount()
-				: calculateInstallment(p.getPlan().getPremiumAmount(), p.getPlan(), p.getSelectedPremiumType() != null ? p.getSelectedPremiumType() : p.getPlan().getPremiumType());
+		boolean isOneTimeOrTravel = (p.getPlan() != null && p.getPlan().getProduct() != null && p.getPlan().getProduct().getProductType() == ProductType.TRAVEL)
+				|| p.getSelectedPremiumType() == PremiumType.ONE_TIME
+				|| "ONE_TIME".equalsIgnoreCase(selectedType);
+
+		// Installments are only applicable for recurring payment plans (MONTHLY, QUARTERLY, etc.).
+		// For TRAVEL or ONE_TIME policies, installmentAmount is null so Jackson @JsonInclude(NON_NULL) hides it.
+		Double instAmount = isOneTimeOrTravel
+				? null
+				: ((p.getInstallmentAmount() != null)
+						? p.getInstallmentAmount()
+						: calculateInstallment(p.getPlan().getPremiumAmount(), p.getPlan(), p.getSelectedPremiumType() != null ? p.getSelectedPremiumType() : p.getPlan().getPremiumType()));
+
+		String productName = (p.getPlan() != null && p.getPlan().getProduct() != null)
+				? p.getPlan().getProduct().getProductName()
+				: null;
+
+		String productType = (p.getPlan() != null && p.getPlan().getProduct() != null)
+				? p.getPlan().getProduct().getProductType().name()
+				: null;
+
+		Double coverageAmount = (p.getPlan() != null)
+				? p.getPlan().getCoverageAmount()
+				: null;
+
+		String customerEmail = (p.getCustomer() != null && p.getCustomer().getUser() != null)
+				? p.getCustomer().getUser().getEmail()
+				: null;
 
 		return PolicyResponse.builder()
 				.policyId(p.getPolicyId())
 				.policyNumber(p.getPolicyNumber())
 				.customerId(p.getCustomer().getCustomerId())
 				.customerName(p.getCustomer().getUser().getFullName())
+				.customerEmail(customerEmail)
+				.productName(productName)
 				.planId(p.getPlan().getPlanId())
 				.planName(p.getPlan().getPlanName())
+				.coverageAmount(coverageAmount)
 				.premiumAmount(p.getPlan().getPremiumAmount())
 				.selectedPremiumType(selectedType)
 				.installmentAmount(instAmount)
@@ -327,8 +536,78 @@ public class PolicyServiceImpl implements PolicyService {
 				.status(p.getStatus().name())
 				.totalPremiumPaid(p.getTotalPremiumPaid())
 				.lastPaymentDate(p.getLastPaymentDate())
-				.nextPaymentDueDate(p.getNextPaymentDueDate())
+				.nextPaymentDueDate(isOneTimeOrTravel ? null : p.getNextPaymentDueDate())
 				.createdAt(p.getCreatedAt())
+				// Product type for frontend detection
+				.productType(productType)
+				// Motor-specific fields (null for non-MOTOR policies)
+				.vehicleRegistrationNo(p.getVehicleRegistrationNo())
+				.vehicleMakeModel(p.getVehicleMakeModel())
+				.vehicleYear(p.getVehicleYear())
+				.idvAmount(p.getIdvAmount())
+				.build();
+	}
+
+	private record MotorVehicleData(String regNo, String makeModel, Integer year, Double idvAmount) {}
+
+	private MotorVehicleData validateAndBuildMotorData(String regNo, String makeModel, Integer year, double baseCoverage) {
+		if (regNo == null || regNo.isBlank() || makeModel == null || makeModel.isBlank() || year == null) {
+			throw new BadRequestException("Vehicle registration number, make & model, and manufacturing year are required for Motor policies.");
+		}
+		String cleanedRegNo = regNo.replaceAll("[\\s-]", "").toUpperCase().trim();
+		if (!cleanedRegNo.matches("^[A-Z]{2}[0-9]{2}[A-Z]{1,3}[0-9]{4}$")) {
+			throw new BadRequestException("Invalid vehicle registration number format: '" + regNo + "'. Expected format example: MH12AB1234");
+		}
+
+		boolean duplicateVehicle = policyRepository.existsByVehicleRegistrationNoAndStatusIn(
+				cleanedRegNo,
+				List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
+		);
+		if (duplicateVehicle) {
+			throw new BadRequestException("A policy already exists for vehicle registration number: " + cleanedRegNo);
+		}
+
+		int vehicleAge = LocalDate.now().getYear() - year;
+		if (vehicleAge < 0 || year > LocalDate.now().getYear()) {
+			throw new BadRequestException("Invalid vehicle manufacturing year: " + year);
+		}
+		if (vehicleAge > 15) {
+			throw new BadRequestException(
+					"Vehicle manufactured in " + year + " is " + vehicleAge
+					+ " years old. Vehicles older than 15 years are not eligible for insurance on this platform.");
+		}
+
+		double idvAmount = calculateIDV(baseCoverage, vehicleAge);
+		return new MotorVehicleData(
+				cleanedRegNo,
+				makeModel.trim(),
+				year,
+				idvAmount
+		);
+	}
+
+	private Policy buildPolicyEntity(Customer customer, PolicyPlan plan, PremiumType selectedType,
+									  LocalDate startDate, LocalDate endDate, double installmentAmount,
+									  String motorVehicleRegNo, String motorVehicleMakeModel,
+									  Integer motorVehicleYear, Double motorIdvAmount) {
+		ProductType productType = plan.getProduct().getProductType();
+		boolean isOneTimeOrTravel = (productType == ProductType.TRAVEL || selectedType == PremiumType.ONE_TIME);
+
+		return Policy.builder()
+				.policyNumber(NumberGenerator.generatePolicyNumber())
+				.customer(customer)
+				.plan(plan)
+				.selectedPremiumType(selectedType)
+				.installmentAmount(installmentAmount)
+				.startDate(startDate)
+				.endDate(endDate)
+				.status(PolicyStatus.PENDING_PAYMENT)
+				.totalPremiumPaid(0.0)
+				.nextPaymentDueDate(isOneTimeOrTravel ? null : startDate)
+				.vehicleRegistrationNo(motorVehicleRegNo)
+				.vehicleMakeModel(motorVehicleMakeModel)
+				.vehicleYear(motorVehicleYear)
+				.idvAmount(motorIdvAmount)
 				.build();
 	}
 }

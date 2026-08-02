@@ -46,16 +46,16 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> verifyRazorpayPayment(
             @Valid @RequestBody com.insurance.demo.dto.VerifyRazorpayPaymentRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
-    	log.info("Request {}", request);
+    	
         String role = principal.getUser().getRole().name();
         return ResponseEntity.ok(paymentService.verifyRazorpayPayment(request, principal.getUser().getId(), role));
     }
 
 
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     @GetMapping
-    @Operation(summary = "Get all payments (Admin/Agent)")
+    @Operation(summary = "Get all payments (Admin/Officer)")
     public ResponseEntity<PagedResponse<PaymentResponse>> getAllPayments(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,

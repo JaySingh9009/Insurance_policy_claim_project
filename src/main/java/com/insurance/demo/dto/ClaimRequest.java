@@ -20,6 +20,7 @@ public class ClaimRequest {
     @NotNull(message = "Claim amount is required")
     @DecimalMin(value = "1.0", message = "Claim amount must be at least 1")
     @Positive(message = "Claim amount must be positive")
+    @jakarta.validation.constraints.Digits(integer = 10, fraction = 0, message = "Claim amount cannot contain decimal or floating values")
     private Double claimAmount;
 
     @NotBlank(message = "Claim reason is required")
@@ -33,4 +34,10 @@ public class ClaimRequest {
     @NotNull(message = "At least one document is required")
     @Size(min = 1, max = 10, message = "You must submit between 1 and 10 documents")
     private List<ClaimDocumentRequest> documents;
+
+    /**
+     * Optional — only relevant for MOTOR policies.
+     * Allowed values: ACCIDENT, THEFT, FIRE, NATURAL_CALAMITY, BREAKDOWN, OTHER
+     */
+    private String claimCategory;
 }

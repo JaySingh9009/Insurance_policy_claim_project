@@ -45,6 +45,8 @@ public class AuthController {
         String message = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", message));
     }
+    
+    
 
     @PostMapping("/verify-otp")
     @Operation(
@@ -55,6 +57,8 @@ public class AuthController {
             @Valid @RequestBody VerifyOtpRequest request) {
         return ResponseEntity.ok(authService.verifyOtp(request));
     }
+    
+    
 
     @PostMapping("/login")
     @Operation(
@@ -65,6 +69,8 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
+    
+    
 
 
     @PostMapping("/forgot-password")
@@ -78,6 +84,9 @@ public class AuthController {
         String message = passwordResetService.sendForgotPasswordOtp(request);
         return ResponseEntity.ok(Map.of("message", message));
     }
+    
+    
+    
 
     @PostMapping({"/verify-reset-otp"})
     @Operation(
@@ -89,6 +98,8 @@ public class AuthController {
         String message = passwordResetService.verifyForgotPasswordOtp(request);
         return ResponseEntity.ok(Map.of("message", message));
     }
+    
+    
 
     @PostMapping("/reset-password")
     @Operation(
@@ -101,4 +112,6 @@ public class AuthController {
         String message = passwordResetService.resetPassword(request);
         return ResponseEntity.ok(Map.of("message", message));
     }
+    
+    
 }

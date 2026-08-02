@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class CreateAgentRequest {
+public class CreateOfficerRequest {
 
     @NotBlank(message = "Full name is required")
     private String fullName;

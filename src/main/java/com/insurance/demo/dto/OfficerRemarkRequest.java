@@ -6,12 +6,10 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * Used by Agent to move a claim to UNDER_REVIEW or recommend approve/reject.
- * Remarks are mandatory when making a recommendation (enforced in service layer for UNDER_REVIEW,
- * and by @NotBlank here for all other transitions).
+ * Used by Insurance Officer to move a claim to UNDER_REVIEW or recommend approve/reject.
  */
 @Data
-public class AgentRemarkRequest {
+public class OfficerRemarkRequest {
 
     @NotNull(message = "Target status is required")
     private String targetStatus; // UNDER_REVIEW | RECOMMENDED_APPROVAL | RECOMMENDED_REJECTION

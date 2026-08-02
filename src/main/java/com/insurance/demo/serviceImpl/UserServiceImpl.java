@@ -1,6 +1,7 @@
 package com.insurance.demo.serviceImpl;
 
-import com.insurance.demo.dto.CreateAgentRequest;
+
+import com.insurance.demo.dto.CreateOfficerRequest;
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.UserResponse;
 import com.insurance.demo.entity.User;
@@ -36,27 +37,29 @@ public class UserServiceImpl implements UserService {
     private final ClaimRepository claimRepository;
     private final PasswordEncoder passwordEncoder;
 
+   
+
     @Override
-    public UserResponse createAgent(CreateAgentRequest request) {
-        log.info("Admin creating agent: {}", request.getEmail());
+    public UserResponse createOfficer(com.insurance.demo.dto.CreateOfficerRequest request) {
+        log.info("Admin creating insurance officer: {}", request.getEmail());
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            log.warn("Agent creation failed - email exists: {}", request.getEmail());
+            log.warn("Officer creation failed - email exists: {}", request.getEmail());
             throw new DuplicateEmailException("Email already in use: " + request.getEmail());
         }
 
-        User agent = User.builder()
+        User officer = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .mobileNumber(request.getMobileNumber())
-                .role(Role.AGENT)
+                .role(Role.OFFICER)
                 .active(true)
                 .build();
 
-        agent = userRepository.save(agent);
-        log.info("Agent created: userId={}", agent.getId());
-        return mapToResponse(agent);
+        officer = userRepository.save(officer);
+        log.info("Insurance officer created: userId={}", officer.getId());
+        return mapToResponse(officer);
     }
 
     @Override
@@ -115,15 +118,15 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
     }
 
-    private static final Set<com.insurance.demo.enums.ClaimStatus> AGENT_ACTIVE_STATUSES = Set.of(
+    private static final Set<com.insurance.demo.enums.ClaimStatus> OFFICER_ACTIVE_STATUSES = Set.of(
             com.insurance.demo.enums.ClaimStatus.SUBMITTED,
             com.insurance.demo.enums.ClaimStatus.UNDER_REVIEW
     );
 
     private UserResponse mapToResponse(User u) {
         long activeTaskCount = 0;
-        if (u.getRole() == Role.AGENT) {
-            activeTaskCount = claimRepository.countByAssignedAgentIdAndStatusIn(u.getId(), AGENT_ACTIVE_STATUSES);
+        if (u.getRole() == Role.OFFICER) {
+            activeTaskCount = claimRepository.countByAssignedOfficerIdAndStatusIn(u.getId(), OFFICER_ACTIVE_STATUSES);
         }
         return UserResponse.builder()
                 .id(u.getId())

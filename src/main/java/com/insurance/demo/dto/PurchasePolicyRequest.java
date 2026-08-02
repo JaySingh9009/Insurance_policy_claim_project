@@ -15,8 +15,21 @@ public class PurchasePolicyRequest {
     private String selectedPremiumType;
 
     /**
-     * startDate is optional — defaults to today if not provided.
-     * Must be present or future if provided.
+     * startDate is optional for LIFE/HEALTH/MOTOR — defaults to today if not provided.
+     * For TRAVEL policies this is the departure date (required).
      */
     private LocalDate startDate;
+
+    /**
+     * Only used for TRAVEL policies — the customer's return/end date.
+     * For LIFE/HEALTH/MOTOR this is ignored; endDate is auto-calculated
+     * from startDate + plan.durationInYears.
+     */
+    private LocalDate endDate;
+
+    // ── Motor-specific fields (only required when productType = MOTOR) ────────
+    private String vehicleRegistrationNo;  // e.g. "MH12AB1234"
+    private String vehicleMakeModel;       // e.g. "Maruti Swift"
+    private Integer vehicleYear;           // manufacturing year, e.g. 2019
+    // Note: idvAmount is NOT sent by client — calculated server-side via IRDA depreciation
 }

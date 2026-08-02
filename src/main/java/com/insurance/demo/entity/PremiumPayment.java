@@ -33,7 +33,7 @@ public class PremiumPayment {
     private LocalDateTime paymentDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "payment_method", nullable = false, length = 50)
     private PaymentMethod paymentMethod;
 
     @Column(unique = true, nullable = false)

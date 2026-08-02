@@ -60,9 +60,9 @@ public class CustomerController {
                         principal.getUser().getId()));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     @GetMapping
-    @Operation(summary = "Get all customers with pagination (Admin/Agent)")
+    @Operation(summary = "Get all customers with pagination (Admin/Officer)")
     public ResponseEntity<PagedResponse<CustomerResponse>> getAllCustomers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,

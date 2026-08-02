@@ -191,22 +191,10 @@ public class PaymentServiceImpl implements PaymentService {
                 : (policy.getInstallmentAmount() != null ? policy.getInstallmentAmount() : policy.getPlan().getPremiumAmount());
         
         
-        com.insurance.demo.enums.PaymentMethod method;
-        try {
-        	
-            method = com.insurance.demo.enums.PaymentMethod.valueOf(
-                    request.getPaymentMethod() != null ? request.getPaymentMethod().toUpperCase() : "UPI"
-            );
-            
-            
-        } catch (IllegalArgumentException e) {
-            method = com.insurance.demo.enums.PaymentMethod.UPI;
-        }
-
         PremiumPayment payment = PremiumPayment.builder()
                 .policy(policy)
                 .amount(paidAmount)
-                .paymentMethod(method)
+                .paymentMethod(com.insurance.demo.enums.PaymentMethod.RAZORPAY)
                 .transactionReference(request.getRazorpayPaymentId())
                 .paymentStatus(PaymentStatus.SUCCESS)
                 .paymentDate(java.time.LocalDateTime.now())
@@ -231,14 +219,20 @@ public class PaymentServiceImpl implements PaymentService {
                 ? policy.getSelectedPremiumType()
                 : (policy.getPlan() != null ? policy.getPlan().getPremiumType() : PremiumType.ANNUAL);
 
+        boolean isTravelOrOneTime = (policy.getPlan() != null && policy.getPlan().getProduct() != null && policy.getPlan().getProduct().getProductType() == com.insurance.demo.enums.ProductType.TRAVEL)
+                || pType == PremiumType.ONE_TIME;
+
         LocalDate nextDue;
-        switch (pType) {
-            case MONTHLY -> nextDue = baseDate.plusMonths(1);
-            case QUARTERLY -> nextDue = baseDate.plusMonths(3);
-            case SEMI_ANNUAL -> nextDue = baseDate.plusMonths(6);
-            case ANNUAL -> nextDue = baseDate.plusYears(1);
-            case ONE_TIME -> nextDue = policy.getEndDate();
-            default -> nextDue = baseDate.plusYears(1);
+        if (isTravelOrOneTime) {
+            nextDue = null;
+        } else {
+            switch (pType) {
+                case MONTHLY -> nextDue = baseDate.plusMonths(1);
+                case QUARTERLY -> nextDue = baseDate.plusMonths(3);
+                case SEMI_ANNUAL -> nextDue = baseDate.plusMonths(6);
+                case ANNUAL -> nextDue = baseDate.plusYears(1);
+                default -> nextDue = baseDate.plusYears(1);
+            }
         }
 
         policy.setNextPaymentDueDate(nextDue);

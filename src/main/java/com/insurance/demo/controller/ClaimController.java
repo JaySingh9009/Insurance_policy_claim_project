@@ -47,30 +47,30 @@ public class ClaimController {
     }
 
     
-    @PreAuthorize("hasRole('AGENT')")
-    @RequestMapping(value = "/{id}/review", method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
-    @Operation(summary = "Agent moves claim to UNDER_REVIEW")
+    @PreAuthorize("hasRole('OFFICER')")
+    @PatchMapping("/{id}/review")
+    @Operation(summary = "Insurance Officer moves claim to UNDER_REVIEW")
     public ResponseEntity<ClaimResponse> reviewClaim(
             @PathVariable Long id,
-            @Valid @RequestBody AgentRemarkRequest request,
+            @Valid @RequestBody OfficerRemarkRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
-                request.setTargetStatus("UNDER_REVIEW");
-        return ResponseEntity.ok(claimService.updateClaimStatus(id, request, principal.getUser().getId()));
+        request.setTargetStatus("UNDER_REVIEW");
+        return ResponseEntity.ok(claimService.updateOfficerClaimStatus(id, request, principal.getUser().getId()));
     }
 
-    @PreAuthorize("hasRole('AGENT')")
-    @RequestMapping(value = "/{id}/recommend", method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
-    @Operation(summary = "Agent recommends APPROVAL or REJECTION")
+    @PreAuthorize("hasRole('OFFICER')")
+    @PatchMapping("/{id}/recommend")
+    @Operation(summary = "Insurance Officer recommends APPROVAL or REJECTION")
     public ResponseEntity<ClaimResponse> recommendClaim(
             @PathVariable Long id,
-            @Valid @RequestBody AgentRemarkRequest request,
+            @Valid @RequestBody OfficerRemarkRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
-        return ResponseEntity.ok(claimService.updateClaimStatus(id, request, principal.getUser().getId()));
+        return ResponseEntity.ok(claimService.updateOfficerClaimStatus(id, request, principal.getUser().getId()));
     }
 
 
     @PreAuthorize("hasRole('ADMIN')")
-    @RequestMapping(value = {"/{id}/decide"}, method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
+    @PatchMapping("/{id}/decide")
     @Operation(summary = "Admin makes final APPROVED or REJECTED decision")
     public ResponseEntity<ClaimResponse> makeDecision(
             @PathVariable Long id,
@@ -80,23 +80,23 @@ public class ClaimController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
-    @RequestMapping(value = {"/{id}/assign", "/{id}/assign-agent"}, method = {RequestMethod.PATCH, RequestMethod.PUT, RequestMethod.POST})
-    @Operation(summary = "Admin assigns an agent to a claim (Admin only)")
-    public ResponseEntity<ClaimResponse> assignAgent(
+    @PatchMapping("/{id}/assign-officer")
+    @Operation(summary = "Admin assigns an Insurance Officer to a claim (Admin only)")
+    public ResponseEntity<ClaimResponse> assignOfficer(
             @PathVariable Long id,
-            @RequestParam(required = false) Long agentId,
-            @RequestBody(required = false) AssignAgentRequest request) {
-        Long finalAgentId = (agentId != null) ? agentId : (request != null ? request.getAgentId() : null);
-        if (finalAgentId == null) {
-            throw new com.insurance.demo.exception.BadRequestException("Agent ID must be provided.");
+            @RequestParam(required = false) Long officerId,
+            @RequestBody(required = false) AssignOfficerRequest request) {
+        Long finalOfficerId = (officerId != null) ? officerId : (request != null ? request.getOfficerId() : null);
+        if (finalOfficerId == null) {
+            throw new com.insurance.demo.exception.BadRequestException("Officer ID must be provided.");
         }
-        return ResponseEntity.ok(claimService.assignAgent(id, finalAgentId));
+        return ResponseEntity.ok(claimService.assignOfficer(id, finalOfficerId));
     }
 
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     @GetMapping
-    @Operation(summary = "Get all claims (Admin/Agent)")
+    @Operation(summary = "Get all claims (Admin/Insurance Officer)")
     public ResponseEntity<PagedResponse<ClaimResponse>> getAllClaims(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,

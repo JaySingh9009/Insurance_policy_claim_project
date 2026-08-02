@@ -1,6 +1,9 @@
 package com.insurance.demo.enums;
 
 public enum PaymentMethod {
-
-	UPI, CREDIT_CARD, DEBIT_CARD, NET_BANKING 
-}
+	RAZORPAY,
+	UPI,
+	CASH,
+	CARD,
+	NET_BANKING
+}

@@ -37,9 +37,9 @@ public class PolicyController {
                         principal.getUser().getId()));
     }
 
-    @PreAuthorize("hasRole('AGENT')")
+    @PreAuthorize("hasRole('OFFICER')")
     @PostMapping("/issue")
-    @Operation(summary = "Agent issues policy to a specific customer")
+    @Operation(summary = "Insurance Officer issues policy to a specific customer")
     public ResponseEntity<PolicyResponse> issuePolicy(
             @Valid @RequestBody IssuePolicyRequest request) {
 
@@ -66,9 +66,9 @@ public class PolicyController {
                         sortDir));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     @GetMapping
-    @Operation(summary = "Get all policies (Admin/Agent)")
+    @Operation(summary = "Get all policies (Admin/Insurance Officer)")
     public ResponseEntity<PagedResponse<PolicyResponse>> getAllPolicies(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -88,9 +88,9 @@ public class PolicyController {
 
     
     //yah se customer ka role hata diya hai ki wo cnacel kar paye
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancel a policy ( Admin/Agent can cancel any)")
+    @Operation(summary = "Cancel a policy ( Admin/Insurance Officer can cancel any)")
     public ResponseEntity<PolicyResponse> cancelPolicy(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails principal) {

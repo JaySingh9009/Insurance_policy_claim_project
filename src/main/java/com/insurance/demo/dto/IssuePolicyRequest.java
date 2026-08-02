@@ -20,4 +20,15 @@ public class IssuePolicyRequest {
     private String selectedPremiumType;
 
     private LocalDate startDate;
+
+    /**
+     * Required for TRAVEL policies (return date).
+     * For LIFE/HEALTH/MOTOR, endDate is calculated automatically from plan duration.
+     */
+    private LocalDate endDate;
+
+    // ── Motor-specific fields (only required when productType = MOTOR) ────────
+    private String vehicleRegistrationNo;
+    private String vehicleMakeModel;
+    private Integer vehicleYear;
 }

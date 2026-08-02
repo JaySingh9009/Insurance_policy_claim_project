@@ -24,7 +24,7 @@ public class ClaimDocumentController {
     private final ClaimDocumentService claimDocumentService;
 
 
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'AGENT', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'OFFICER', 'ADMIN')")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
         summary = "STEP 1: Upload a claim document to Cloudinary (do this BEFORE submitting claim)",
