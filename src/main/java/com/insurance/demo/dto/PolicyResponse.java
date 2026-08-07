@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @AllArgsConstructor
@@ -41,4 +42,11 @@ public class PolicyResponse {
     private String vehicleMakeModel;
     private Integer vehicleYear;
     private Double idvAmount;
+
+    // ── Health-specific fields (null for non-HEALTH policies) ────────────────
+    private List<String> preExistingDiseases;
+
+    // ── Life-specific fields (null for non-LIFE policies) ───────────────────
+    private String nomineeName;
+    private String nomineeRelation;
 }

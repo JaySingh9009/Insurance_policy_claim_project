@@ -43,6 +43,12 @@ public class PaymentServiceImpl implements PaymentService {
     private final PolicyRepository policyRepository;
     private final CustomerRepository customerRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${razorpay.key.id:rzp_test_THPAh3J7KnVXXJ}")
+    private String razorpayKeyId;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.razorpay.RazorpayClient razorpayClient;
+
 
 
     @Override
@@ -124,6 +130,15 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BadRequestException("Cannot make payment on a " + policy.getStatus() + " policy.");
         }
 
+        boolean isTravel = policy.getPlan() != null && policy.getPlan().getProduct() != null &&
+                policy.getPlan().getProduct().getProductType() == com.insurance.demo.enums.ProductType.TRAVEL;
+
+        if (isTravel && LocalDate.now().isAfter(policy.getStartDate())) {
+            policy.setStatus(PolicyStatus.EXPIRED);
+            policyRepository.save(policy);
+            throw new BadRequestException("Payment for Travel policy must be completed on or before the departure date (" + policy.getStartDate() + ").");
+        }
+
         // Validate if premium is already paid for current cycle
         if (policy.getStatus() == PolicyStatus.ACTIVE &&
             policy.getNextPaymentDueDate() != null &&
@@ -135,21 +150,36 @@ public class PaymentServiceImpl implements PaymentService {
                 ? request.getAmount()
                 : (policy.getInstallmentAmount() != null ? policy.getInstallmentAmount() : policy.getPlan().getPremiumAmount());
 
-        String orderId = "order_RZP_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().substring(0, 6);
+        String orderId = null;
+        if (razorpayClient != null) {
+            try {
+                org.json.JSONObject orderRequest = new org.json.JSONObject();
+                orderRequest.put("amount", Math.round(payableAmount * 100)); // amount in paise
+                orderRequest.put("currency", "INR");
+                orderRequest.put("receipt", "txn_" + System.currentTimeMillis());
+
+                com.razorpay.Order order = razorpayClient.orders.create(orderRequest);
+                orderId = order.get("id");
+                log.info("Successfully generated real Razorpay order ID via SDK: {}", orderId);
+            } catch (Exception e) {
+                log.warn("Razorpay API order creation failed ({}), using fallback order ID generator.", e.getMessage());
+            }
+        }
+
+        if (orderId == null) {
+            orderId = "order_RZP_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().substring(0, 6);
+        }
 
         String customerName = policy.getCustomer() != null && policy.getCustomer().getUser() != null
                 ? policy.getCustomer().getUser().getFullName() : "Valued Customer";
         String customerEmail = policy.getCustomer() != null && policy.getCustomer().getUser() != null
                 ? policy.getCustomer().getUser().getEmail() : "customer@insurance.com";
         
-       
-        
-    
         return com.insurance.demo.dto.RazorpayOrderResponse.builder()
                 .orderId(orderId)
                 .amount(payableAmount)
                 .currency("INR")
-                .keyId("rzp_test_THPAh3J7KnVXXJ")
+                .keyId(razorpayKeyId != null ? razorpayKeyId : "rzp_test_THPAh3J7KnVXXJ")
                 .policyId(policy.getPolicyId())
                 .policyNumber(policy.getPolicyNumber())
                 .customerName(customerName)
@@ -174,6 +204,15 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (policy.getStatus() == PolicyStatus.CANCELLED || policy.getStatus() == PolicyStatus.EXPIRED) {
             throw new BadRequestException("Cannot make payment on a " + policy.getStatus() + " policy.");
+        }
+
+        boolean isTravelPolicy = policy.getPlan() != null && policy.getPlan().getProduct() != null &&
+                policy.getPlan().getProduct().getProductType() == com.insurance.demo.enums.ProductType.TRAVEL;
+
+        if (isTravelPolicy && LocalDate.now().isAfter(policy.getStartDate())) {
+            policy.setStatus(PolicyStatus.EXPIRED);
+            policyRepository.save(policy);
+            throw new BadRequestException("Payment for Travel policy must be completed on or before the departure date (" + policy.getStartDate() + ").");
         }
 
         if (policy.getStatus() == PolicyStatus.ACTIVE &&

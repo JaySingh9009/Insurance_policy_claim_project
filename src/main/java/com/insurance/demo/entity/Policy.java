@@ -9,13 +9,19 @@ import org.hibernate.annotations.UpdateTimestamp;
 import com.insurance.demo.enums.PolicyStatus;
 import com.insurance.demo.enums.PremiumType;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -26,7 +32,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "policies")
+@Table(name = "policies", indexes = {
+    @Index(name = "idx_policy_customer", columnList = "customer_id"),
+    @Index(name = "idx_policy_cust_status", columnList = "customer_id, status"),
+    @Index(name = "idx_policy_vehicle_no", columnList = "vehicle_registration_no")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -88,6 +98,20 @@ public class Policy {
 
     @Column
     private Double idvAmount;             // IRDA-depreciated Insured Declared Value
+
+    // ── Health-specific fields (null for non-HEALTH policies) ─────────────────
+    @ElementCollection
+    @CollectionTable(name = "policy_pre_existing_diseases", joinColumns = @JoinColumn(name = "policy_id"))
+    @Column(name = "disease_name")
+    @Builder.Default
+    private List<String> preExistingDiseases = new ArrayList<>();
+
+    // ── Life-specific fields (null for non-LIFE policies) ───────────────────
+    @Column
+    private String nomineeName;
+
+    @Column
+    private String nomineeRelation;
 
     @CreationTimestamp
     @Column(updatable = false)

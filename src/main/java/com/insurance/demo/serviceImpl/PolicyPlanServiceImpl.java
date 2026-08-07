@@ -81,6 +81,14 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
 
 
     @Override
+    public PagedResponse<PolicyPlanResponse> getAllPlans(int page, int size, String sortBy, String sortDir) {
+        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
+        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Page<PolicyPlan> planPage = planRepository.findAll(pageable);
+        return toPagedResponse(planPage);
+    }
+
+    @Override
     public PagedResponse<PolicyPlanResponse> getActivePlans(int page, int size, String sortBy, String sortDir) {
         PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
         Pageable pageable = buildPageable(page, size, sortBy, sortDir);

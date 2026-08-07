@@ -32,6 +32,17 @@ public class PolicyPlanController {
 
 
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping
+    @Operation(summary = "Get all plans (Admin only)")
+    public ResponseEntity<PagedResponse<PolicyPlanResponse>> getAllPlans(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "planName") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        return ResponseEntity.ok(planService.getAllPlans(page, size, sortBy, sortDir));
+    }
+
     @GetMapping("/active")
     @Operation(summary = "Get all active plans with pagination")
     public ResponseEntity<PagedResponse<PolicyPlanResponse>> getActivePlans(

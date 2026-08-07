@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Used by Admin/Agent to issue a policy to a specific customer.
@@ -31,4 +32,11 @@ public class IssuePolicyRequest {
     private String vehicleRegistrationNo;
     private String vehicleMakeModel;
     private Integer vehicleYear;
+
+    // ── Health-specific fields (only used when productType = HEALTH) ──────────
+    private List<String> preExistingDiseases;
+
+    // ── Life-specific fields (only used when productType = LIFE) ────────────
+    private String nomineeName;
+    private String nomineeRelation;
 }

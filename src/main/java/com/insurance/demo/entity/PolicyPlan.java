@@ -44,8 +44,9 @@ public class PolicyPlan {
     @Column(length = 2000)
     private String termsAndConditions;
 
+    @Builder.Default
     @Column(nullable = false)
-    private boolean active;
+    private boolean active = true;
 
     @CreationTimestamp
     @Column(updatable = false)

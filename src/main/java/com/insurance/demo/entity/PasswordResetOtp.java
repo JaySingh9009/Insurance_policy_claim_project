@@ -19,12 +19,16 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import jakarta.persistence.Index;
+
 /**
  * Forgot-password OTP records ko store karta hai.
  * Registration OTP se alag table — taaki dono flows independent rahein.
  */
 @Entity
-@Table(name = "password_reset_otps")
+@Table(name = "password_reset_otps", indexes = {
+    @Index(name = "idx_pwd_otp_user_used_created", columnList = "user_id, used, created_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor

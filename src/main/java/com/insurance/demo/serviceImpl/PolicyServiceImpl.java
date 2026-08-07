@@ -2,6 +2,7 @@ package com.insurance.demo.serviceImpl;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -117,9 +118,19 @@ public class PolicyServiceImpl implements PolicyService {
 			}
 		}
 
-		validateNoDuplicatePolicy(customer, plan, startDate, endDate);
+		validateNoDuplicatePolicy(customer, plan, startDate, endDate, request.getVehicleRegistrationNo());
 
-		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType);
+		// ── Health-only: PED Risk Loading ────────────────────────────────────────
+		List<String> diseases = null;
+		double pedLoadingFactor = 1.0;
+		if (productType == ProductType.HEALTH
+				&& request.getPreExistingDiseases() != null
+				&& !request.getPreExistingDiseases().isEmpty()) {
+			diseases = request.getPreExistingDiseases();
+			pedLoadingFactor = calculatePedLoadingFactor(diseases);
+		}
+
+		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType, pedLoadingFactor);
 
 		// ── For MOTOR: validate vehicle details and calculate IDV ────────────────
 		Double motorIdvAmount = null;
@@ -140,7 +151,8 @@ public class PolicyServiceImpl implements PolicyService {
 		}
 
 		Policy policy = buildPolicyEntity(customer, plan, selectedType, startDate, endDate, installment,
-				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount);
+				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount, diseases,
+				request.getNomineeName(), request.getNomineeRelation());
 
 		policy = policyRepository.save(policy);
 
@@ -204,9 +216,19 @@ public class PolicyServiceImpl implements PolicyService {
 			}
 		}
 
-		validateNoDuplicatePolicy(customer, plan, startDate, endDate);
+		validateNoDuplicatePolicy(customer, plan, startDate, endDate, request.getVehicleRegistrationNo());
 
-		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType);
+		// ── Health-only: PED Risk Loading ────────────────────────────────────────
+		List<String> diseases = null;
+		double pedLoadingFactor = 1.0;
+		if (productType == ProductType.HEALTH
+				&& request.getPreExistingDiseases() != null
+				&& !request.getPreExistingDiseases().isEmpty()) {
+			diseases = request.getPreExistingDiseases();
+			pedLoadingFactor = calculatePedLoadingFactor(diseases);
+		}
+
+		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType, pedLoadingFactor);
 
 		// ── For MOTOR: validate vehicle details and calculate IDV ────────────────
 		Double motorIdvAmount = null;
@@ -227,7 +249,8 @@ public class PolicyServiceImpl implements PolicyService {
 		}
 
 		Policy policy = buildPolicyEntity(customer, plan, selectedType, startDate, endDate, installment,
-				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount);
+				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount, diseases,
+				request.getNomineeName(), request.getNomineeRelation());
 
 		policy = policyRepository.save(policy);
 
@@ -376,7 +399,7 @@ public class PolicyServiceImpl implements PolicyService {
 	 * products are exempt since customers may legitimately hold multiple
 	 * life policies.
 	 */
-	private void validateNoDuplicatePolicy(Customer customer, PolicyPlan plan, LocalDate startDate, LocalDate endDate) {
+	private void validateNoDuplicatePolicy(Customer customer, PolicyPlan plan, LocalDate startDate, LocalDate endDate, String vehicleRegistrationNo) {
 		ProductType targetProductType = plan.getProduct().getProductType();
 
 		if (targetProductType == ProductType.TRAVEL) {
@@ -406,7 +429,19 @@ public class PolicyServiceImpl implements PolicyService {
 				throw new BadRequestException("Customer already holds an active or pending policy for the plan '"
 						+ plan.getPlanName() + "'. You can purchase other Life Insurance plans, but cannot buy the exact same plan twice.");
 			}
-		} else if (targetProductType != ProductType.MOTOR) {
+		} else if (targetProductType == ProductType.MOTOR) {
+			// MOTOR: Cannot purchase multiple active/pending policies for the exact same vehicle registration number
+			if (vehicleRegistrationNo != null && !vehicleRegistrationNo.isBlank()) {
+				boolean existsMotor = policyRepository.existsByVehicleRegistrationNoAndStatusIn(
+						vehicleRegistrationNo.trim().toUpperCase(),
+						List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
+				);
+				if (existsMotor) {
+					throw new BadRequestException("An active, pending, or lapsed motor policy already exists for vehicle registration number: "
+							+ vehicleRegistrationNo.trim().toUpperCase());
+				}
+			}
+		} else {
 			boolean hasDuplicate = policyRepository.existsByCustomerCustomerIdAndPlanProductProductTypeAndStatusIn(
 					customer.getCustomerId(),
 					targetProductType,
@@ -419,34 +454,74 @@ public class PolicyServiceImpl implements PolicyService {
 		}
 	}
 	
-//	---------------------------------------------CALCULATE INSTALMMENT -------------------------------------------
+//	---------------------------------------------CALCULATE INSTALLMENT -------------------------------------------
 
-	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, PremiumType type) {
+	/**
+	 * Primary overload — accepts pedLoadingFactor (1.0 = no loading, 1.25 = +25%).
+	 * Loading is applied ONLY for HEALTH policies; all others always pass 1.0.
+	 * Returns whole-number installment (no decimals/paisa).
+	 */
+	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, PremiumType type, double pedLoadingFactor) {
 		if (totalAnnualPremium == null) return 0.0;
+		double loadedPremium = totalAnnualPremium * pedLoadingFactor;
 		if (type == PremiumType.MONTHLY) {
-			return Math.round((totalAnnualPremium / 12.0) * 100.0) / 100.0;
+			return (double) Math.round(loadedPremium / 12.0);
 		} else if (type == PremiumType.QUARTERLY) {
 			// 1.5% discount for Quarterly frequency
-			double discountedAnnual = totalAnnualPremium * 0.985;
-			return Math.round((discountedAnnual / 4.0) * 100.0) / 100.0;
+			double discountedAnnual = loadedPremium * 0.985;
+			return (double) Math.round(discountedAnnual / 4.0);
 		} else if (type == PremiumType.SEMI_ANNUAL) {
 			// 3% discount for Semi-Annual frequency
-			double discountedAnnual = totalAnnualPremium * 0.97;
-			return Math.round((discountedAnnual / 2.0) * 100.0) / 100.0;
+			double discountedAnnual = loadedPremium * 0.97;
+			return (double) Math.round(discountedAnnual / 2.0);
 		} else if (type == PremiumType.ANNUAL) {
 			// 5% discount for upfront Annual payment
-			double discountedAnnual = totalAnnualPremium * 0.95;
-			return Math.round(discountedAnnual * 100.0) / 100.0;
+			double discountedAnnual = loadedPremium * 0.95;
+			return (double) Math.round(discountedAnnual);
 		} else if (type == PremiumType.ONE_TIME) {
 			if (plan != null && plan.getProduct() != null && plan.getProduct().getProductType() == ProductType.TRAVEL) {
-				return Math.round(totalAnnualPremium * 100.0) / 100.0;
+				return (double) Math.round(loadedPremium);
 			}
 			int duration = (plan != null && plan.getDuration() > 0) ? plan.getDuration() : 1;
 			// 10% discount for full term One-Time lump-sum payment
-			double discountedTotal = (totalAnnualPremium * duration) * 0.90;
-			return Math.round(discountedTotal * 100.0) / 100.0;
+			double discountedTotal = (loadedPremium * duration) * 0.90;
+			return (double) Math.round(discountedTotal);
 		}
-		return totalAnnualPremium;
+		return (double) Math.round(loadedPremium);
+	}
+
+	/**
+	 * Convenience overload with no PED loading (factor = 1.0).
+	 * Used in mapToResponse and for LIFE / MOTOR / TRAVEL policies.
+	 */
+	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, PremiumType type) {
+		return calculateInstallment(totalAnnualPremium, plan, type, 1.0);
+	}
+
+//	---------------------------------------------CALCULATE PED LOADING FACTOR -------------------------------------------
+
+	/**
+	 * Maps each declared pre-existing disease code to its loading % and returns
+	 * a combined multiplier. Loadings are additive:
+	 *   DIABETES(+15%) + HYPERTENSION(+10%)  =>  factor 1.25
+	 * HEALTH ONLY — never called for LIFE / MOTOR / TRAVEL.
+	 */
+	private double calculatePedLoadingFactor(List<String> diseases) {
+		if (diseases == null || diseases.isEmpty()) return 1.0;
+		double totalLoading = 0.0;
+		for (String disease : diseases) {
+			switch (disease.toUpperCase().trim()) {
+				case "DIABETES"      -> totalLoading += 0.15;
+				case "HYPERTENSION"  -> totalLoading += 0.10;
+				case "ASTHMA_COPD"   -> totalLoading += 0.10;
+				case "THYROID"       -> totalLoading += 0.05;
+				case "HEART_DISEASE" -> totalLoading += 0.30;
+				case "KIDNEY_LIVER"  -> totalLoading += 0.25;
+				case "OTHER"         -> totalLoading += 0.05;
+				default              -> {} // unknown code — ignore
+			}
+		}
+		return 1.0 + totalLoading;
 	}
 	
 	
@@ -518,6 +593,11 @@ public class PolicyServiceImpl implements PolicyService {
 				? p.getCustomer().getUser().getEmail()
 				: null;
 
+		// Health-specific: disease list (null for non-HEALTH)
+		List<String> diseaseList = (p.getPreExistingDiseases() != null && !p.getPreExistingDiseases().isEmpty())
+				? p.getPreExistingDiseases()
+				: null;
+
 		return PolicyResponse.builder()
 				.policyId(p.getPolicyId())
 				.policyNumber(p.getPolicyNumber())
@@ -536,7 +616,7 @@ public class PolicyServiceImpl implements PolicyService {
 				.status(p.getStatus().name())
 				.totalPremiumPaid(p.getTotalPremiumPaid())
 				.lastPaymentDate(p.getLastPaymentDate())
-				.nextPaymentDueDate(isOneTimeOrTravel ? null : p.getNextPaymentDueDate())
+				.nextPaymentDueDate((isOneTimeOrTravel || p.getStatus() == PolicyStatus.PENDING_PAYMENT) ? null : p.getNextPaymentDueDate())
 				.createdAt(p.getCreatedAt())
 				// Product type for frontend detection
 				.productType(productType)
@@ -545,6 +625,11 @@ public class PolicyServiceImpl implements PolicyService {
 				.vehicleMakeModel(p.getVehicleMakeModel())
 				.vehicleYear(p.getVehicleYear())
 				.idvAmount(p.getIdvAmount())
+				// Health-specific fields (null for non-HEALTH policies)
+				.preExistingDiseases(diseaseList)
+				// Life-specific fields (null for non-LIFE policies)
+				.nomineeName(p.getNomineeName())
+				.nomineeRelation(p.getNomineeRelation())
 				.build();
 	}
 
@@ -589,9 +674,31 @@ public class PolicyServiceImpl implements PolicyService {
 	private Policy buildPolicyEntity(Customer customer, PolicyPlan plan, PremiumType selectedType,
 									  LocalDate startDate, LocalDate endDate, double installmentAmount,
 									  String motorVehicleRegNo, String motorVehicleMakeModel,
-									  Integer motorVehicleYear, Double motorIdvAmount) {
+									  Integer motorVehicleYear, Double motorIdvAmount,
+									  List<String> preExistingDiseases,
+									  String nomineeName, String nomineeRelation) {
 		ProductType productType = plan.getProduct().getProductType();
 		boolean isOneTimeOrTravel = (productType == ProductType.TRAVEL || selectedType == PremiumType.ONE_TIME);
+
+		List<String> diseases = (preExistingDiseases != null && !preExistingDiseases.isEmpty())
+				? preExistingDiseases
+				: new ArrayList<>();
+
+		String resolvedNomineeName = null;
+		String resolvedNomineeRelation = null;
+		if (productType == ProductType.LIFE) {
+			if (nomineeName != null && !nomineeName.isBlank()) {
+				if (nomineeName.matches(".*\\d.*")) {
+					throw new BadRequestException("Nominee name cannot contain numbers.");
+				}
+				resolvedNomineeName = nomineeName.trim();
+			} else {
+				resolvedNomineeName = (customer != null ? customer.getNomineeName() : null);
+			}
+			resolvedNomineeRelation = (nomineeRelation != null && !nomineeRelation.isBlank())
+					? nomineeRelation.trim()
+					: (customer != null ? customer.getNomineeRelation() : null);
+		}
 
 		return Policy.builder()
 				.policyNumber(NumberGenerator.generatePolicyNumber())
@@ -603,11 +710,14 @@ public class PolicyServiceImpl implements PolicyService {
 				.endDate(endDate)
 				.status(PolicyStatus.PENDING_PAYMENT)
 				.totalPremiumPaid(0.0)
-				.nextPaymentDueDate(isOneTimeOrTravel ? null : startDate)
+				.nextPaymentDueDate(null)
 				.vehicleRegistrationNo(motorVehicleRegNo)
 				.vehicleMakeModel(motorVehicleMakeModel)
 				.vehicleYear(motorVehicleYear)
 				.idvAmount(motorIdvAmount)
+				.preExistingDiseases(diseases)
+				.nomineeName(resolvedNomineeName)
+				.nomineeRelation(resolvedNomineeRelation)
 				.build();
 	}
 }

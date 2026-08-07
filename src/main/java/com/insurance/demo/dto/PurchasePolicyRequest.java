@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class PurchasePolicyRequest {
@@ -32,4 +33,11 @@ public class PurchasePolicyRequest {
     private String vehicleMakeModel;       // e.g. "Maruti Swift"
     private Integer vehicleYear;           // manufacturing year, e.g. 2019
     // Note: idvAmount is NOT sent by client — calculated server-side via IRDA depreciation
+
+    // ── Health-specific fields (only used when productType = HEALTH) ──────────
+    private List<String> preExistingDiseases;
+
+    // ── Life-specific fields (only used when productType = LIFE) ────────────
+    private String nomineeName;
+    private String nomineeRelation;
 }
