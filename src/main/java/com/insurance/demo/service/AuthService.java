@@ -23,4 +23,9 @@ public interface AuthService {
      * Logs in an already-verified and active user; returns a JWT token.
      */
     LoginResponse login(LoginRequest request);
+
+    /**
+     * Logs out user and invalidates the JWT token in Redis blacklist.
+     */
+    void logout(String authHeader);
 }

@@ -88,7 +88,7 @@ public class PolicyController {
 
     
     //yah se customer ka role hata diya hai ki wo cnacel kar paye
-    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     @PatchMapping("/{id}/cancel")
     @Operation(summary = "Cancel a policy ( Admin/Insurance Officer can cancel any)")
     public ResponseEntity<PolicyResponse> cancelPolicy(

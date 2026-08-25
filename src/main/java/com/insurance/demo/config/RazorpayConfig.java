@@ -7,16 +7,18 @@ import org.springframework.context.annotation.Configuration;
 import com.razorpay.RazorpayClient;
 import com.razorpay.RazorpayException;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
+@Getter
 @Slf4j
 public class RazorpayConfig {
 
-    @Value("${razorpay.key.id:rzp_test_THPAh3J7KnVXXJ}")
+    @Value("${razorpay.key.id}")
     private String keyId;
 
-    @Value("${razorpay.key.secret:dummy_razorpay_secret_key_12345}")
+    @Value("${razorpay.key.secret}")
     private String keySecret;
 
     @Bean

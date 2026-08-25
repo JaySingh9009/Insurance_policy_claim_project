@@ -1,9 +1,13 @@
 package com.insurance.demo.serviceImpl;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
+import org.json.JSONObject;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -11,14 +15,21 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.insurance.demo.config.RazorpayConfig;
+import com.insurance.demo.dto.CreateRazorpayOrderRequest;
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PaymentResponse;
+import com.insurance.demo.dto.RazorpayOrderResponse;
+import com.insurance.demo.dto.VerifyRazorpayPaymentRequest;
 import com.insurance.demo.entity.Customer;
 import com.insurance.demo.entity.Policy;
 import com.insurance.demo.entity.PremiumPayment;
+import com.insurance.demo.entity.User;
+import com.insurance.demo.enums.PaymentMethod;
 import com.insurance.demo.enums.PaymentStatus;
 import com.insurance.demo.enums.PolicyStatus;
 import com.insurance.demo.enums.PremiumType;
+import com.insurance.demo.enums.ProductType;
 import com.insurance.demo.exception.BadRequestException;
 import com.insurance.demo.exception.DuplicateResourceException;
 import com.insurance.demo.exception.ResourceNotFoundException;
@@ -28,6 +39,8 @@ import com.insurance.demo.repository.PaymentRepository;
 import com.insurance.demo.repository.PolicyRepository;
 import com.insurance.demo.service.PaymentService;
 import com.insurance.demo.util.PaginationValidator;
+import com.razorpay.Order;
+import com.razorpay.RazorpayClient;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,14 +55,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final PolicyRepository policyRepository;
     private final CustomerRepository customerRepository;
-
-    @org.springframework.beans.factory.annotation.Value("${razorpay.key.id:rzp_test_THPAh3J7KnVXXJ}")
-    private String razorpayKeyId;
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.razorpay.RazorpayClient razorpayClient;
-
-
+    private final RazorpayConfig razorpayConfig;
+    private final ObjectProvider<RazorpayClient> razorpayClientProvider;
 
     @Override
     public PagedResponse<PaymentResponse> getAllPayments(int page, int size, String sortBy, String sortDir) {
@@ -78,7 +85,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentId(p.getPaymentId())
                 .policyId(p.getPolicy().getPolicyId())
                 .policyNumber(p.getPolicy().getPolicyNumber())
-                .customerName(p.getPolicy().getCustomer() != null && p.getPolicy().getCustomer().getUser() != null ? p.getPolicy().getCustomer().getUser().getFullName() : null)
+                .customerName(p.getPolicy().getCustomer() != null && p.getPolicy().getCustomer().getUser() != null 
+                        ? p.getPolicy().getCustomer().getUser().getFullName() : null)
                 .amount(p.getAmount())
                 .paymentMode(p.getPaymentMethod().name())
                 .transactionReference(p.getTransactionReference())
@@ -114,51 +122,21 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public com.insurance.demo.dto.RazorpayOrderResponse createRazorpayOrder(com.insurance.demo.dto.CreateRazorpayOrderRequest request, Long userId, String role) {
-        Policy policy = policyRepository.findById(request.getPolicyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + request.getPolicyId()));
+    public RazorpayOrderResponse createRazorpayOrder(CreateRazorpayOrderRequest request, Long userId, String role) {
+        Policy policy = validateAndGetPolicyForPayment(request.getPolicyId(), userId, role);
 
-        if ("CUSTOMER".equals(role)) {
-            Customer customer = customerRepository.findByUser_Id(userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for user: " + userId));
-            if (!policy.getCustomer().getCustomerId().equals(customer.getCustomerId())) {
-                throw new UnauthorizedAccessException("You can only pay for your own policy.");
-            }
-        }
-
-        if (policy.getStatus() == PolicyStatus.CANCELLED || policy.getStatus() == PolicyStatus.EXPIRED) {
-            throw new BadRequestException("Cannot make payment on a " + policy.getStatus() + " policy.");
-        }
-
-        boolean isTravel = policy.getPlan() != null && policy.getPlan().getProduct() != null &&
-                policy.getPlan().getProduct().getProductType() == com.insurance.demo.enums.ProductType.TRAVEL;
-
-        if (isTravel && LocalDate.now().isAfter(policy.getStartDate())) {
-            policy.setStatus(PolicyStatus.EXPIRED);
-            policyRepository.save(policy);
-            throw new BadRequestException("Payment for Travel policy must be completed on or before the departure date (" + policy.getStartDate() + ").");
-        }
-
-        // Validate if premium is already paid for current cycle
-        if (policy.getStatus() == PolicyStatus.ACTIVE &&
-            policy.getNextPaymentDueDate() != null &&
-            LocalDate.now().isBefore(policy.getNextPaymentDueDate())) {
-            throw new BadRequestException("Your premium for this cycle is already paid! Next installment is due on " + policy.getNextPaymentDueDate() + ".");
-        }
-
-        Double payableAmount = request.getAmount() != null && request.getAmount() > 0
-                ? request.getAmount()
-                : (policy.getInstallmentAmount() != null ? policy.getInstallmentAmount() : policy.getPlan().getPremiumAmount());
+        Double payableAmount = calculatePayableAmount(policy, request.getAmount());
 
         String orderId = null;
+        RazorpayClient razorpayClient = razorpayClientProvider.getIfAvailable();
         if (razorpayClient != null) {
             try {
-                org.json.JSONObject orderRequest = new org.json.JSONObject();
+                JSONObject orderRequest = new JSONObject();
                 orderRequest.put("amount", Math.round(payableAmount * 100)); // amount in paise
                 orderRequest.put("currency", "INR");
                 orderRequest.put("receipt", "txn_" + System.currentTimeMillis());
 
-                com.razorpay.Order order = razorpayClient.orders.create(orderRequest);
+                Order order = razorpayClient.orders.create(orderRequest);
                 orderId = order.get("id");
                 log.info("Successfully generated real Razorpay order ID via SDK: {}", orderId);
             } catch (Exception e) {
@@ -167,76 +145,40 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         if (orderId == null) {
-            orderId = "order_RZP_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().substring(0, 6);
+            orderId = "order_RZP_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 6);
         }
 
-        String customerName = policy.getCustomer() != null && policy.getCustomer().getUser() != null
-                ? policy.getCustomer().getUser().getFullName() : "Valued Customer";
-        String customerEmail = policy.getCustomer() != null && policy.getCustomer().getUser() != null
-                ? policy.getCustomer().getUser().getEmail() : "customer@insurance.com";
-        
-        return com.insurance.demo.dto.RazorpayOrderResponse.builder()
+        return RazorpayOrderResponse.builder()
                 .orderId(orderId)
                 .amount(payableAmount)
                 .currency("INR")
-                .keyId(razorpayKeyId != null ? razorpayKeyId : "rzp_test_THPAh3J7KnVXXJ")
+                .keyId(razorpayConfig.getKeyId())
                 .policyId(policy.getPolicyId())
                 .policyNumber(policy.getPolicyNumber())
-                .customerName(customerName)
-                .customerEmail(customerEmail)
-                .planName(policy.getPlan() != null ? policy.getPlan().getPlanName() : "Insurance Plan")
+                .customerName(policy.getCustomer().getUser().getFullName())
+                .customerEmail(policy.getCustomer().getUser().getEmail())
+                .planName(policy.getPlan().getPlanName())
                 .build();
     }
 
     @Override
     @Transactional
-    public PaymentResponse verifyRazorpayPayment(com.insurance.demo.dto.VerifyRazorpayPaymentRequest request, Long userId, String role) {
-        Policy policy = policyRepository.findById(request.getPolicyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + request.getPolicyId()));
-
-        if ("CUSTOMER".equals(role)) {
-            Customer customer = customerRepository.findByUser_Id(userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for user: " + userId));
-            if (!policy.getCustomer().getCustomerId().equals(customer.getCustomerId())) {
-                throw new UnauthorizedAccessException("You can only pay for your own policy.");
-            }
-        }
-
-        if (policy.getStatus() == PolicyStatus.CANCELLED || policy.getStatus() == PolicyStatus.EXPIRED) {
-            throw new BadRequestException("Cannot make payment on a " + policy.getStatus() + " policy.");
-        }
-
-        boolean isTravelPolicy = policy.getPlan() != null && policy.getPlan().getProduct() != null &&
-                policy.getPlan().getProduct().getProductType() == com.insurance.demo.enums.ProductType.TRAVEL;
-
-        if (isTravelPolicy && LocalDate.now().isAfter(policy.getStartDate())) {
-            policy.setStatus(PolicyStatus.EXPIRED);
-            policyRepository.save(policy);
-            throw new BadRequestException("Payment for Travel policy must be completed on or before the departure date (" + policy.getStartDate() + ").");
-        }
-
-        if (policy.getStatus() == PolicyStatus.ACTIVE &&
-            policy.getNextPaymentDueDate() != null &&
-            LocalDate.now().isBefore(policy.getNextPaymentDueDate())) {
-            throw new BadRequestException("Your premium for this cycle is already paid! Next installment is due on " + policy.getNextPaymentDueDate() + ".");
-        }
+    public PaymentResponse verifyRazorpayPayment(VerifyRazorpayPaymentRequest request, Long userId, String role) {
+        Policy policy = validateAndGetPolicyForPayment(request.getPolicyId(), userId, role);
 
         if (paymentRepository.findByTransactionReference(request.getRazorpayPaymentId()).isPresent()) {
             throw new DuplicateResourceException("Payment with reference '" + request.getRazorpayPaymentId() + "' already processed.");
         }
 
-        Double paidAmount = request.getAmount() != null && request.getAmount() > 0
-                ? request.getAmount()
-                : (policy.getInstallmentAmount() != null ? policy.getInstallmentAmount() : policy.getPlan().getPremiumAmount());
-        
+        Double paidAmount = calculatePayableAmount(policy, request.getAmount());
         
         PremiumPayment payment = PremiumPayment.builder()
                 .policy(policy)
                 .amount(paidAmount)
-                .paymentMethod(com.insurance.demo.enums.PaymentMethod.RAZORPAY)
+                .paymentMethod(PaymentMethod.RAZORPAY)
                 .transactionReference(request.getRazorpayPaymentId())
                 .paymentStatus(PaymentStatus.SUCCESS)
-                .paymentDate(java.time.LocalDateTime.now())
+                .paymentDate(LocalDateTime.now())
                 .build();
 
         paymentRepository.save(payment);
@@ -258,7 +200,8 @@ public class PaymentServiceImpl implements PaymentService {
                 ? policy.getSelectedPremiumType()
                 : (policy.getPlan() != null ? policy.getPlan().getPremiumType() : PremiumType.ANNUAL);
 
-        boolean isTravelOrOneTime = (policy.getPlan() != null && policy.getPlan().getProduct() != null && policy.getPlan().getProduct().getProductType() == com.insurance.demo.enums.ProductType.TRAVEL)
+        boolean isTravelOrOneTime = (policy.getPlan() != null && policy.getPlan().getProduct() != null 
+                && policy.getPlan().getProduct().getProductType() == ProductType.TRAVEL)
                 || pType == PremiumType.ONE_TIME;
 
         LocalDate nextDue;
@@ -277,11 +220,56 @@ public class PaymentServiceImpl implements PaymentService {
         policy.setNextPaymentDueDate(nextDue);
         policyRepository.save(policy);
 
-        log.info("Razorpay Payment VERIFIED & SUCCESS: {} for policy {} (Status: ACTIVE, Next Due: {})",
-                request.getRazorpayPaymentId(), policy.getPolicyNumber(), nextDue);
+        log.info("Razorpay Payment VERIFIED & SUCCESS: Transaction Ref: {}, Policy: {}, Amount: {}, Next Due: {}",
+                request.getRazorpayPaymentId(), policy.getPolicyNumber(), paidAmount, nextDue);
 
-        log.info("Razorpay Payment VERIFIED & SUCCESS: {} for policy {} (Status: ACTIVE, Next Due: {})",
-                payment);
-         return mapToResponse(payment);
+        return mapToResponse(payment);
+    }
+
+    private Policy validateAndGetPolicyForPayment(Long policyId, Long userId, String role) {
+        Policy policy = policyRepository.findById(policyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + policyId));
+
+        if (policy.getCustomer() == null || policy.getCustomer().getUser() == null || policy.getPlan() == null) {
+            throw new ResourceNotFoundException("Customer profile, user account, or policy plan not found for policy ID: " + policyId);
+        }
+
+        if ("CUSTOMER".equals(role)) {
+            Customer customer = customerRepository.findByUser_Id(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found for user: " + userId));
+            if (!policy.getCustomer().getCustomerId().equals(customer.getCustomerId())) {
+                throw new UnauthorizedAccessException("You can only pay for your own policy.");
+            }
+        }
+
+        if (policy.getStatus() == PolicyStatus.CANCELLED || policy.getStatus() == PolicyStatus.EXPIRED) {
+            throw new BadRequestException("Cannot make payment on a " + policy.getStatus() + " policy.");
+        }
+
+        boolean isTravel = policy.getPlan() != null && policy.getPlan().getProduct() != null &&
+                policy.getPlan().getProduct().getProductType() == ProductType.TRAVEL;
+
+        if (isTravel && LocalDate.now().isAfter(policy.getStartDate())) {
+            policy.setStatus(PolicyStatus.EXPIRED);
+            policyRepository.save(policy);
+            throw new BadRequestException("Payment for Travel policy must be completed on or before the departure date (" + policy.getStartDate() + ").");
+        }
+
+        if (policy.getStatus() == PolicyStatus.ACTIVE &&
+            policy.getNextPaymentDueDate() != null &&
+            LocalDate.now().isBefore(policy.getNextPaymentDueDate())) {
+            throw new BadRequestException("Your premium for this cycle is already paid! Next installment is due on " + policy.getNextPaymentDueDate() + ".");
+        }
+
+        return policy;
+    }
+
+    private Double calculatePayableAmount(Policy policy, Double requestedAmount) {
+        if (requestedAmount != null && requestedAmount > 0) {
+            return requestedAmount;
+        }
+        return policy.getInstallmentAmount() != null && policy.getInstallmentAmount() > 0
+                ? policy.getInstallmentAmount()
+                : policy.getPlan().getPremiumAmount();
     }
 }

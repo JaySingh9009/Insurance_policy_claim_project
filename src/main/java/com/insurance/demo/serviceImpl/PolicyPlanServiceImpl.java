@@ -1,5 +1,14 @@
 package com.insurance.demo.serviceImpl;
 
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PolicyPlanRequest;
 import com.insurance.demo.dto.PolicyPlanResponse;
@@ -8,21 +17,16 @@ import com.insurance.demo.entity.PolicyPlan;
 import com.insurance.demo.enums.PremiumType;
 import com.insurance.demo.enums.ProductType;
 import com.insurance.demo.exception.BadRequestException;
+import com.insurance.demo.exception.DuplicateResourceException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.PolicyPlanRepository;
 import com.insurance.demo.repository.ProductRepository;
 import com.insurance.demo.service.PolicyPlanService;
 import com.insurance.demo.util.PaginationValidator;
+
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +39,7 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
     private final ProductRepository productRepository;
 
     @Override
+    @Transactional
     public PolicyPlanResponse createPlan(PolicyPlanRequest request) {
         log.info("Creating plan for productId={}", request.getProductId());
 
@@ -44,6 +49,12 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
         if (!product.isActive()) {
             log.warn("Cannot add plan to inactive product: productId={}", product.getProductId());
             throw new BadRequestException("Cannot add a plan to an inactive product");
+        }
+
+        String sanitizedPlanName = request.getPlanName() != null ? request.getPlanName().trim() : "";
+        if (planRepository.existsByProductProductIdAndPlanNameIgnoreCase(product.getProductId(), sanitizedPlanName)) {
+            log.warn("Plan creation failed - duplicate plan name '{}' for productId={}", sanitizedPlanName, product.getProductId());
+            throw new DuplicateResourceException("A policy plan with name '" + sanitizedPlanName + "' already exists for this product.");
         }
 
         // Business rule: coverage must be greater than premium

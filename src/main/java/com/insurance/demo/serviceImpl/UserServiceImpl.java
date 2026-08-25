@@ -1,19 +1,9 @@
 package com.insurance.demo.serviceImpl;
 
 
-import com.insurance.demo.dto.CreateOfficerRequest;
-import com.insurance.demo.dto.PagedResponse;
-import com.insurance.demo.dto.UserResponse;
-import com.insurance.demo.entity.User;
-import com.insurance.demo.enums.Role;
-import com.insurance.demo.exception.BadRequestException;
-import com.insurance.demo.exception.DuplicateEmailException;
-import com.insurance.demo.exception.ResourceNotFoundException;
-import com.insurance.demo.repository.UserRepository;
-import com.insurance.demo.service.UserService;
-import com.insurance.demo.util.PaginationValidator;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.Set;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,10 +11,21 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Set;
-
+import com.insurance.demo.dto.PagedResponse;
+import com.insurance.demo.dto.UserResponse;
+import com.insurance.demo.entity.User;
+import com.insurance.demo.enums.Role;
+import com.insurance.demo.exception.BadRequestException;
+import com.insurance.demo.exception.DuplicateEmailException;
+import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.ClaimRepository;
+import com.insurance.demo.repository.UserRepository;
+import com.insurance.demo.service.UserService;
+import com.insurance.demo.util.PaginationValidator;
+
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
@@ -85,6 +86,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserResponse activateUser(Long id) {
         User user = findUser(id);
         if (user.isActive()) {
@@ -97,6 +99,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserResponse deactivateUser(Long id, Long requestingUserId) {
         if (id.equals(requestingUserId)) {
             throw new BadRequestException("You cannot deactivate your own account");

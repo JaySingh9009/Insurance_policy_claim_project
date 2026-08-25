@@ -40,15 +40,30 @@ public class JwtService {
     }
 
     public String extractUsername(String token) {
-        return getClaims(token).getSubject();
+        try {
+            return getClaims(token).getSubject();
+        } catch (Exception e) {
+            log.warn("Failed to extract username from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     public Long extractUserId(String token) {
-        return getClaims(token).get("userId", Long.class);
+        try {
+            return getClaims(token).get("userId", Long.class);
+        } catch (Exception e) {
+            log.warn("Failed to extract userId from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     public String extractRole(String token) {
-        return getClaims(token).get("role", String.class);
+        try {
+            return getClaims(token).get("role", String.class);
+        } catch (Exception e) {
+            log.warn("Failed to extract role from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     public boolean isTokenValid(String token) {
@@ -67,5 +82,16 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public long getRemainingExpirationMs(String token) {
+        try {
+            Date expiration = getClaims(token).getExpiration();
+            long diff = expiration.getTime() - System.currentTimeMillis();
+            return Math.max(diff, 0);
+        } catch (Exception e) {
+            log.warn("Failed to extract token expiration: {}", e.getMessage());
+            return 0;
+        }
     }
 }

@@ -16,4 +16,6 @@ public interface PolicyPlanRepository extends JpaRepository<PolicyPlan, Long> {
     Page<PolicyPlan> findByProductProductIdAndActiveTrue(Long productId, Pageable pageable);
 
     Page<PolicyPlan> findByActiveTrue(Pageable pageable);
+
+    boolean existsByProductProductIdAndPlanNameIgnoreCase(Long productId, String planName);
 }

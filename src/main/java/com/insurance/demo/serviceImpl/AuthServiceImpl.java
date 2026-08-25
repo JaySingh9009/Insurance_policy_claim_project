@@ -1,5 +1,11 @@
 package com.insurance.demo.serviceImpl;
 
+import java.util.Optional;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.insurance.demo.dto.LoginRequest;
 import com.insurance.demo.dto.LoginResponse;
 import com.insurance.demo.dto.RegisterRequest;
@@ -14,13 +20,12 @@ import com.insurance.demo.exception.InvalidCredentialsException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.UserRepository;
 import com.insurance.demo.security.JwtService;
+import com.insurance.demo.security.TokenBlacklistService;
 import com.insurance.demo.service.AuthService;
 import com.insurance.demo.service.OtpService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +36,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final OtpService otpService;
+    private final TokenBlacklistService tokenBlacklistService;
     
     
     
@@ -40,7 +46,7 @@ public class AuthServiceImpl implements AuthService {
     public String register(RegisterRequest request) {
         log.info("Registering new customer: {}", request.getEmail());
 
-        java.util.Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
+        Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
         User user;
 
         if (existingUser.isPresent()) {
@@ -132,6 +138,22 @@ public class AuthServiceImpl implements AuthService {
     }
 
     
+    @Override
+    public void logout(String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7).trim();
+            long remainingMs = jwtService.getRemainingExpirationMs(token);
+            if (remainingMs > 0) {
+                tokenBlacklistService.blacklistToken(token, remainingMs);
+                log.info("Successfully processed logout and token blacklisting.");
+            } else {
+                log.warn("Token remaining expiration time is <= 0 ms, skipping Redis blacklisting.");
+            }
+        } else {
+            log.warn("Logout endpoint invoked without valid Bearer Authorization header! Received: {}", authHeader);
+        }
+    }
+
 //Mapping user response after verifying otp
     private UserResponse mapToUserResponse(User user) {
         return new UserResponse(

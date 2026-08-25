@@ -1,7 +1,5 @@
 package com.insurance.demo.controller;
 
-
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -12,11 +10,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.insurance.demo.dto.CreateRazorpayOrderRequest;
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.PaymentResponse;
+import com.insurance.demo.dto.RazorpayOrderResponse;
+import com.insurance.demo.dto.VerifyRazorpayPaymentRequest;
 import com.insurance.demo.security.CustomUserDetails;
 import com.insurance.demo.service.PaymentService;
-import com.insurance.demo.serviceImpl.PaymentServiceImpl;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,22 +29,25 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Tag(name = "Premium Payments", description = "Record and view premium payments")
 public class PaymentController {
+	
 
     private final PaymentService paymentService;
 
     @PostMapping("/create-order")
     @Operation(summary = "Create Razorpay Order for Policy Payment")
-    public ResponseEntity<com.insurance.demo.dto.RazorpayOrderResponse> createRazorpayOrder(
-            @Valid @RequestBody com.insurance.demo.dto.CreateRazorpayOrderRequest request,
+    public ResponseEntity<RazorpayOrderResponse> createRazorpayOrder(
+            @Valid @RequestBody CreateRazorpayOrderRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
         String role = principal.getUser().getRole().name();
         return ResponseEntity.ok(paymentService.createRazorpayOrder(request, principal.getUser().getId(), role));
     }
 
+    
+    
     @PostMapping("/verify")
     @Operation(summary = "Verify Razorpay Payment Signature and activate policy")
     public ResponseEntity<PaymentResponse> verifyRazorpayPayment(
-            @Valid @RequestBody com.insurance.demo.dto.VerifyRazorpayPaymentRequest request,
+            @Valid @RequestBody VerifyRazorpayPaymentRequest request,
             @AuthenticationPrincipal CustomUserDetails principal) {
     	
         String role = principal.getUser().getRole().name();
@@ -63,6 +66,9 @@ public class PaymentController {
             @RequestParam(defaultValue = "desc") String sortDir) {
         return ResponseEntity.ok(paymentService.getAllPayments(page, size, sortBy, sortDir));
     }
+    
+    
+    
     
     @PreAuthorize("hasRole('CUSTOMER')")
     @GetMapping("/my")

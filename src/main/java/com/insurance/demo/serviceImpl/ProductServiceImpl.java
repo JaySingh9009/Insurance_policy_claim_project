@@ -1,5 +1,14 @@
 package com.insurance.demo.serviceImpl;
 
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.ProductRequest;
 import com.insurance.demo.dto.ProductResponse;
@@ -11,16 +20,10 @@ import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.repository.ProductRepository;
 import com.insurance.demo.service.ProductService;
 import com.insurance.demo.util.PaginationValidator;
+
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +35,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
 
     @Override
+    @Transactional
     public ProductResponse createProduct(ProductRequest request) {
         log.info("Creating insurance product: {}", request.getProductName());
 
@@ -55,6 +59,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
         log.info("Updating product: id={}", id);
 

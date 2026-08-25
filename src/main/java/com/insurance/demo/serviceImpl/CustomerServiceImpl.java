@@ -23,6 +23,7 @@ import com.insurance.demo.repository.UserRepository;
 import com.insurance.demo.service.CustomerService;
 import com.insurance.demo.util.PaginationValidator;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,6 +40,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final UserRepository userRepository;
 
     @Override
+    @Transactional	
     public CustomerResponse createProfile(
             CustomerRequest request,
             Long userId) {
@@ -86,6 +88,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Transactional
     public CustomerResponse updateProfile(
             CustomerRequest request,
             Long userId) {

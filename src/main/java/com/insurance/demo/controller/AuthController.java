@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,11 +18,13 @@ import com.insurance.demo.dto.ResetPasswordRequest;
 import com.insurance.demo.dto.UserResponse;
 import com.insurance.demo.dto.VerifyForgotPasswordOtpRequest;
 import com.insurance.demo.dto.VerifyOtpRequest;
+import com.insurance.demo.security.CustomUserDetails;
 import com.insurance.demo.service.AuthService;
 import com.insurance.demo.service.PasswordResetService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -113,5 +116,17 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", message));
     }
     
-    
+    @PostMapping("/logout")
+    @Operation(
+        summary = "Logout user and invalidate JWT token in Redis blacklist",
+        description = "Invalidates current Bearer JWT token so it cannot be reused."
+    )
+    public ResponseEntity<Map<String, String>> logout(
+            HttpServletRequest request,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        String authHeader = request.getHeader("Authorization");
+        authService.logout(authHeader);
+        return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+    }
+
 }

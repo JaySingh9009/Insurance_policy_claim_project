@@ -47,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PolicyServiceImpl implements PolicyService {
 
 	private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("createdAt", "status", "startDate", "endDate");
+	private static final List<PolicyStatus> UNFINISHED_STATUSES = List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED);
 
 	private final PolicyRepository policyRepository;
 	private final PolicyPlanRepository planRepository;
@@ -64,101 +65,12 @@ public class PolicyServiceImpl implements PolicyService {
 
 		PolicyPlan plan = findActivePlan(request.getPlanId());
 
-		ProductType productType = plan.getProduct().getProductType();
-
-		LocalDate startDate;
-		LocalDate endDate;
-		PremiumType selectedType;
-
-		if (productType == ProductType.TRAVEL) {
-			// TRAVEL: customer must supply both departure date and return date
-			if (request.getStartDate() == null || request.getEndDate() == null) {
-				throw new BadRequestException("Travel policies require both a departure date (startDate) and a return date (endDate).");
-			}
-			startDate = request.getStartDate();
-			endDate   = request.getEndDate();
-			if (startDate.isBefore(LocalDate.now())) {
-				throw new BadRequestException("Departure date cannot be in the past.");
-			}
-			if (!endDate.isAfter(startDate)) {
-				throw new BadRequestException("Return date must be after the departure date.");
-			}
-			long tripDays = ChronoUnit.DAYS.between(startDate, endDate);
-			if (tripDays > plan.getDuration()) {
-				throw new BadRequestException(
-					"Trip duration of " + tripDays + " day(s) exceeds the maximum allowed " + plan.getDuration() + " day(s) for this plan.");
-			}
-			// Travel policies are always ONE_TIME (single trip, fixed dates)
-			selectedType = PremiumType.ONE_TIME;
-		} else if (productType == ProductType.MOTOR) {
-			startDate = (request.getStartDate() != null) ? request.getStartDate() : LocalDate.now();
-			if (startDate.isBefore(LocalDate.now())) {
-				throw new BadRequestException("Start date cannot be in the past");
-			}
-			endDate = startDate.plusYears(plan.getDuration());
-			selectedType = plan.getPremiumType();
-			if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
-				try {
-					selectedType = PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
-				} catch (IllegalArgumentException ignored) {}
-			}
-
-		} else {
-			// LIFE / HEALTH: existing logic unchanged
-			startDate = (request.getStartDate() != null) ? request.getStartDate() : LocalDate.now();
-			if (startDate.isBefore(LocalDate.now())) {
-				throw new BadRequestException("Start date cannot be in the past");
-			}
-			endDate = startDate.plusYears(plan.getDuration());
-			selectedType = plan.getPremiumType();
-			if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
-				try {
-					selectedType = PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
-				} catch (IllegalArgumentException ignored) {}
-			}
-		}
-
-		validateNoDuplicatePolicy(customer, plan, startDate, endDate, request.getVehicleRegistrationNo());
-
-		// ── Health-only: PED Risk Loading ────────────────────────────────────────
-		List<String> diseases = null;
-		double pedLoadingFactor = 1.0;
-		if (productType == ProductType.HEALTH
-				&& request.getPreExistingDiseases() != null
-				&& !request.getPreExistingDiseases().isEmpty()) {
-			diseases = request.getPreExistingDiseases();
-			pedLoadingFactor = calculatePedLoadingFactor(diseases);
-		}
-
-		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType, pedLoadingFactor);
-
-		// ── For MOTOR: validate vehicle details and calculate IDV ────────────────
-		Double motorIdvAmount = null;
-		String motorVehicleRegNo = null;
-		String motorVehicleMakeModel = null;
-		Integer motorVehicleYear = null;
-		if (productType == ProductType.MOTOR) {
-			MotorVehicleData motorData = validateAndBuildMotorData(
-					request.getVehicleRegistrationNo(),
-					request.getVehicleMakeModel(),
-					request.getVehicleYear(),
-					plan.getCoverageAmount()
-			);
-			motorVehicleRegNo = motorData.regNo;
-			motorVehicleMakeModel = motorData.makeModel;
-			motorVehicleYear = motorData.year;
-			motorIdvAmount = motorData.idvAmount;
-		}
-
-		Policy policy = buildPolicyEntity(customer, plan, selectedType, startDate, endDate, installment,
-				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount, diseases,
-				request.getNomineeName(), request.getNomineeRelation());
-
-		policy = policyRepository.save(policy);
-
-		log.info("Policy purchased: policyId={}, policyNumber={}, selectedType={}", policy.getPolicyId(), policy.getPolicyNumber(), selectedType);
-
-		return mapToResponse(policy);
+		return processPolicyCreation(
+				customer, plan, request.getStartDate(), request.getEndDate(),
+				request.getSelectedPremiumType(), request.getPreExistingDiseases(),
+				request.getVehicleRegistrationNo(), request.getVehicleMakeModel(), request.getVehicleYear(),
+				request.getNomineeName(), request.getNomineeRelation()
+		);
 	}
 
 	
@@ -176,85 +88,173 @@ public class PolicyServiceImpl implements PolicyService {
 
 		PolicyPlan plan = findActivePlan(request.getPlanId());
 
+		return processPolicyCreation(
+				customer, plan, request.getStartDate(), request.getEndDate(),
+				request.getSelectedPremiumType(), request.getPreExistingDiseases(),
+				request.getVehicleRegistrationNo(), request.getVehicleMakeModel(), request.getVehicleYear(),
+				request.getNomineeName(), request.getNomineeRelation()
+		);
+	}
+
+	// ── Unified Core Policy Creation Engine ───────────────────────────────────
+
+	private PolicyResponse processPolicyCreation(
+			Customer customer,
+			PolicyPlan plan,
+			LocalDate reqStartDate,
+			LocalDate reqEndDate,
+			String reqSelectedType,
+			List<String> reqDiseases,
+			String reqRegNo,
+			String reqMakeModel,
+			Integer reqYear,
+			String nomineeName,
+			String nomineeRelation
+	) {
 		ProductType productType = plan.getProduct().getProductType();
 
-		LocalDate startDate;
-		LocalDate endDate;
-		PremiumType selectedType;
+		PolicyPreparedContext context = switch (productType) {
+			case TRAVEL -> processTravelPolicyDetails(customer, plan, reqStartDate, reqEndDate);
+			case MOTOR  -> processMotorPolicyDetails(customer, plan, reqStartDate, reqSelectedType, reqRegNo, reqMakeModel, reqYear);
+			case HEALTH -> processHealthPolicyDetails(customer, plan, reqStartDate, reqSelectedType, reqDiseases);
+			case LIFE   -> processLifePolicyDetails(customer, plan, reqStartDate, reqSelectedType);
+		};
 
-		if (productType == ProductType.TRAVEL) {
-			// TRAVEL issued by admin/agent: departure and return dates required
-			if (request.getStartDate() == null || request.getEndDate() == null) {
-				throw new BadRequestException("Travel policies require both a departure date (startDate) and a return date (endDate).");
-			}
-			startDate = request.getStartDate();
-			endDate   = request.getEndDate();
-			if (startDate.isBefore(LocalDate.now())) {
-				throw new BadRequestException("Departure date cannot be in the past.");
-			}
-			if (!endDate.isAfter(startDate)) {
-				throw new BadRequestException("Return date must be after the departure date.");
-			}
-			long tripDays = ChronoUnit.DAYS.between(startDate, endDate);
-			if (tripDays > plan.getDuration()) {
-				throw new BadRequestException(
-					"Trip duration of " + tripDays + " day(s) exceeds the maximum allowed " + plan.getDuration() + " day(s) for this plan.");
-			}
-			selectedType = PremiumType.ONE_TIME;
-		} else {
-			// LIFE / HEALTH / MOTOR
-			startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
-			if (startDate.isBefore(LocalDate.now())) {
-				throw new BadRequestException("Start date cannot be in the past");
-			}
-			endDate = startDate.plusYears(plan.getDuration());
-			selectedType = plan.getPremiumType();
-			if (request.getSelectedPremiumType() != null && !request.getSelectedPremiumType().isBlank()) {
-				try {
-					selectedType = PremiumType.valueOf(request.getSelectedPremiumType().toUpperCase());
-				} catch (IllegalArgumentException ignored) {}
-			}
+		Policy policy = buildPolicyEntity(
+				customer, plan, context.selectedType(), context.startDate(), context.endDate(), context.installmentAmount(),
+				context.vehicleRegNo(), context.vehicleMakeModel(), context.vehicleYear(), context.motorIdvAmount(), context.diseases(),
+				nomineeName, nomineeRelation
+		);
+
+		policy = policyRepository.save(policy);
+
+		log.info("Policy created successfully: policyId={}, policyNumber={}, productType={}, selectedType={}",
+				policy.getPolicyId(), policy.getPolicyNumber(), productType, context.selectedType());
+
+		return mapToResponse(policy);
+	}
+
+	// ── Product Specific Handlers ─────────────────────────────────────────────
+
+	private record PolicyPreparedContext(
+			LocalDate startDate,
+			LocalDate endDate,
+			PremiumType selectedType,
+			double installmentAmount,
+			List<String> diseases,
+			String vehicleRegNo,
+			String vehicleMakeModel,
+			Integer vehicleYear,
+			Double motorIdvAmount
+	) {}
+
+	private PolicyPreparedContext processTravelPolicyDetails(Customer customer, PolicyPlan plan, LocalDate reqStartDate, LocalDate reqEndDate) {
+		if (reqStartDate == null || reqEndDate == null) {
+			throw new BadRequestException("Travel policies require both a departure date (startDate) and a return date (endDate).");
+		}
+		if (reqStartDate.isBefore(LocalDate.now())) {
+			throw new BadRequestException("Departure date cannot be in the past.");
+		}
+		if (!reqEndDate.isAfter(reqStartDate)) {
+			throw new BadRequestException("Return date must be after the departure date.");
+		}
+		long tripDays = ChronoUnit.DAYS.between(reqStartDate, reqEndDate);
+		if (tripDays > plan.getDuration()) {
+			throw new BadRequestException("Trip duration of " + tripDays + " day(s) exceeds the maximum allowed " + plan.getDuration() + " day(s) for this plan.");
 		}
 
-		validateNoDuplicatePolicy(customer, plan, startDate, endDate, request.getVehicleRegistrationNo());
+		List<Policy> overlappingTravel = policyRepository.findOverlappingTravelPolicies(
+				customer.getCustomerId(), reqStartDate, reqEndDate, UNFINISHED_STATUSES);
+		if (!overlappingTravel.isEmpty()) {
+			Policy existing = overlappingTravel.get(0);
+			throw new BadRequestException("Customer already has an active or pending travel policy ("
+					+ existing.getPolicyNumber() + ") covering trip dates from "
+					+ existing.getStartDate() + " to " + existing.getEndDate()
+					+ ". Overlapping travel insurance for the same dates is not allowed.");
+		}
 
-		// ── Health-only: PED Risk Loading ────────────────────────────────────────
+		double installment = calculateInstallment(plan.getPremiumAmount(), plan, PremiumType.ONE_TIME, 1.0);
+
+		return new PolicyPreparedContext(reqStartDate, reqEndDate, PremiumType.ONE_TIME, installment, null, null, null, null, null);
+	}
+
+	private PolicyPreparedContext processMotorPolicyDetails(
+			Customer customer, PolicyPlan plan, LocalDate reqStartDate,
+			String reqSelectedType, String regNo, String makeModel, Integer year) {
+
+		LocalDate startDate = (reqStartDate != null) ? reqStartDate : LocalDate.now();
+		if (startDate.isBefore(LocalDate.now())) {
+			throw new BadRequestException("Start date cannot be in the past");
+		}
+		LocalDate endDate = startDate.plusYears(plan.getDuration());
+		PremiumType selectedType = parseSelectedPremiumType(reqSelectedType, plan.getPremiumType());
+
+		MotorVehicleData motorData = validateAndBuildMotorData(regNo, makeModel, year, plan.getCoverageAmount());
+
+		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType, 1.0);
+
+		return new PolicyPreparedContext(startDate, endDate, selectedType, installment, null,
+				motorData.regNo, motorData.makeModel, motorData.year, motorData.idvAmount);
+	}
+
+	private PolicyPreparedContext processHealthPolicyDetails(
+			Customer customer, PolicyPlan plan, LocalDate reqStartDate,
+			String reqSelectedType, List<String> reqDiseases) {
+
+		LocalDate startDate = (reqStartDate != null) ? reqStartDate : LocalDate.now();
+		if (startDate.isBefore(LocalDate.now())) {
+			throw new BadRequestException("Start date cannot be in the past");
+		}
+		LocalDate endDate = startDate.plusYears(plan.getDuration());
+		PremiumType selectedType = parseSelectedPremiumType(reqSelectedType, plan.getPremiumType());
+
+		boolean hasDuplicate = policyRepository.existsByCustomerCustomerIdAndPlanProductProductTypeAndStatusIn(
+				customer.getCustomerId(), ProductType.HEALTH, UNFINISHED_STATUSES);
+		if (hasDuplicate) {
+			throw new BadRequestException("Customer already has an active, pending, or lapsed policy for product type: HEALTH. Only multiple LIFE and MOTOR policies are allowed.");
+		}
+
 		List<String> diseases = null;
 		double pedLoadingFactor = 1.0;
-		if (productType == ProductType.HEALTH
-				&& request.getPreExistingDiseases() != null
-				&& !request.getPreExistingDiseases().isEmpty()) {
-			diseases = request.getPreExistingDiseases();
+		if (reqDiseases != null && !reqDiseases.isEmpty()) {
+			diseases = reqDiseases;
 			pedLoadingFactor = calculatePedLoadingFactor(diseases);
 		}
 
 		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType, pedLoadingFactor);
 
-		// ── For MOTOR: validate vehicle details and calculate IDV ────────────────
-		Double motorIdvAmount = null;
-		String motorVehicleRegNo = null;
-		String motorVehicleMakeModel = null;
-		Integer motorVehicleYear = null;
-		if (productType == ProductType.MOTOR) {
-			MotorVehicleData motorData = validateAndBuildMotorData(
-					request.getVehicleRegistrationNo(),
-					request.getVehicleMakeModel(),
-					request.getVehicleYear(),
-					plan.getCoverageAmount()
-			);
-			motorVehicleRegNo = motorData.regNo;
-			motorVehicleMakeModel = motorData.makeModel;
-			motorVehicleYear = motorData.year;
-			motorIdvAmount = motorData.idvAmount;
+		return new PolicyPreparedContext(startDate, endDate, selectedType, installment, diseases, null, null, null, null);
+	}
+
+	private PolicyPreparedContext processLifePolicyDetails(
+			Customer customer, PolicyPlan plan, LocalDate reqStartDate, String reqSelectedType) {
+
+		LocalDate startDate = (reqStartDate != null) ? reqStartDate : LocalDate.now();
+		if (startDate.isBefore(LocalDate.now())) {
+			throw new BadRequestException("Start date cannot be in the past");
+		}
+		LocalDate endDate = startDate.plusYears(plan.getDuration());
+		PremiumType selectedType = parseSelectedPremiumType(reqSelectedType, plan.getPremiumType());
+
+		boolean hasSameLifePlan = policyRepository.existsByCustomerCustomerIdAndPlanPlanIdAndStatusIn(
+				customer.getCustomerId(), plan.getPlanId(), UNFINISHED_STATUSES);
+		if (hasSameLifePlan) {
+			throw new BadRequestException("Customer already holds an active or pending policy for the plan '"
+					+ plan.getPlanName() + "'. You can purchase other Life Insurance plans, but cannot buy the exact same plan twice.");
 		}
 
-		Policy policy = buildPolicyEntity(customer, plan, selectedType, startDate, endDate, installment,
-				motorVehicleRegNo, motorVehicleMakeModel, motorVehicleYear, motorIdvAmount, diseases,
-				request.getNomineeName(), request.getNomineeRelation());
+		double installment = calculateInstallment(plan.getPremiumAmount(), plan, selectedType, 1.0);
 
-		policy = policyRepository.save(policy);
+		return new PolicyPreparedContext(startDate, endDate, selectedType, installment, null, null, null, null, null);
+	}
 
-		return mapToResponse(policy);
+	private PremiumType parseSelectedPremiumType(String selectedTypeStr, PremiumType defaultType) {
+		if (selectedTypeStr != null && !selectedTypeStr.isBlank()) {
+			try {
+				return PremiumType.valueOf(selectedTypeStr.toUpperCase());
+			} catch (IllegalArgumentException ignored) {}
+		}
+		return defaultType;
 	}
 	
 
@@ -391,68 +391,7 @@ public class PolicyServiceImpl implements PolicyService {
 	
 	
 	
-//	--------------------------------------------VALIDATION CHECK FOR DUPLICATE POLICY-------------------------------
 
-	/**
-	 * Stops a customer from holding more than one active/pending/lapsed policy
-	 * for the same product type (e.g. two HEALTH policies at once). LIFE
-	 * products are exempt since customers may legitimately hold multiple
-	 * life policies.
-	 */
-	private void validateNoDuplicatePolicy(Customer customer, PolicyPlan plan, LocalDate startDate, LocalDate endDate, String vehicleRegistrationNo) {
-		ProductType targetProductType = plan.getProduct().getProductType();
-
-		if (targetProductType == ProductType.TRAVEL) {
-			if (startDate != null && endDate != null) {
-				List<Policy> overlappingTravel = policyRepository.findOverlappingTravelPolicies(
-						customer.getCustomerId(),
-						startDate,
-						endDate,
-						List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
-				);
-				if (!overlappingTravel.isEmpty()) {
-					Policy existing = overlappingTravel.get(0);
-					throw new BadRequestException("Customer already has an active or pending travel policy ("
-							+ existing.getPolicyNumber() + ") covering trip dates from "
-							+ existing.getStartDate() + " to " + existing.getEndDate()
-							+ ". Overlapping travel insurance for the same dates is not allowed.");
-				}
-			}
-		} else if (targetProductType == ProductType.LIFE) {
-			// LIFE: Customer can hold multiple different LIFE plans, but cannot buy the exact same planId twice while active/pending/lapsed
-			boolean hasSameLifePlan = policyRepository.existsByCustomerCustomerIdAndPlanPlanIdAndStatusIn(
-					customer.getCustomerId(),
-					plan.getPlanId(),
-					List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
-			);
-			if (hasSameLifePlan) {
-				throw new BadRequestException("Customer already holds an active or pending policy for the plan '"
-						+ plan.getPlanName() + "'. You can purchase other Life Insurance plans, but cannot buy the exact same plan twice.");
-			}
-		} else if (targetProductType == ProductType.MOTOR) {
-			// MOTOR: Cannot purchase multiple active/pending policies for the exact same vehicle registration number
-			if (vehicleRegistrationNo != null && !vehicleRegistrationNo.isBlank()) {
-				boolean existsMotor = policyRepository.existsByVehicleRegistrationNoAndStatusIn(
-						vehicleRegistrationNo.trim().toUpperCase(),
-						List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
-				);
-				if (existsMotor) {
-					throw new BadRequestException("An active, pending, or lapsed motor policy already exists for vehicle registration number: "
-							+ vehicleRegistrationNo.trim().toUpperCase());
-				}
-			}
-		} else {
-			boolean hasDuplicate = policyRepository.existsByCustomerCustomerIdAndPlanProductProductTypeAndStatusIn(
-					customer.getCustomerId(),
-					targetProductType,
-					List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
-			);
-			if (hasDuplicate) {
-				throw new BadRequestException("Customer already has an active, pending, or lapsed policy for product type: "
-						+ targetProductType + ". Only multiple LIFE and MOTOR policies are allowed.");
-			}
-		}
-	}
 	
 //	---------------------------------------------CALCULATE INSTALLMENT -------------------------------------------
 
@@ -464,39 +403,26 @@ public class PolicyServiceImpl implements PolicyService {
 	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, PremiumType type, double pedLoadingFactor) {
 		if (totalAnnualPremium == null) return 0.0;
 		double loadedPremium = totalAnnualPremium * pedLoadingFactor;
-		if (type == PremiumType.MONTHLY) {
-			return (double) Math.round(loadedPremium / 12.0);
-		} else if (type == PremiumType.QUARTERLY) {
-			// 1.5% discount for Quarterly frequency
-			double discountedAnnual = loadedPremium * 0.985;
-			return (double) Math.round(discountedAnnual / 4.0);
-		} else if (type == PremiumType.SEMI_ANNUAL) {
-			// 3% discount for Semi-Annual frequency
-			double discountedAnnual = loadedPremium * 0.97;
-			return (double) Math.round(discountedAnnual / 2.0);
-		} else if (type == PremiumType.ANNUAL) {
-			// 5% discount for upfront Annual payment
-			double discountedAnnual = loadedPremium * 0.95;
-			return (double) Math.round(discountedAnnual);
-		} else if (type == PremiumType.ONE_TIME) {
-			if (plan != null && plan.getProduct() != null && plan.getProduct().getProductType() == ProductType.TRAVEL) {
-				return (double) Math.round(loadedPremium);
+		if (type == null) return (double) Math.round(loadedPremium);
+
+		double result = switch (type) {
+			case MONTHLY     -> loadedPremium / 12.0;
+			case QUARTERLY   -> (loadedPremium * 0.985) / 4.0;  // 1.5% discount
+			case SEMI_ANNUAL -> (loadedPremium * 0.97) / 2.0;   // 3.0% discount
+			case ANNUAL      -> loadedPremium * 0.95;           // 5.0% discount
+			case ONE_TIME    -> {
+				if (plan != null && plan.getProduct() != null && plan.getProduct().getProductType() == ProductType.TRAVEL) {
+					yield loadedPremium;
+				}
+				int duration = (plan != null && plan.getDuration() > 0) ? plan.getDuration() : 1;
+				yield (loadedPremium * duration) * 0.90;         // 10% lump-sum discount
 			}
-			int duration = (plan != null && plan.getDuration() > 0) ? plan.getDuration() : 1;
-			// 10% discount for full term One-Time lump-sum payment
-			double discountedTotal = (loadedPremium * duration) * 0.90;
-			return (double) Math.round(discountedTotal);
-		}
-		return (double) Math.round(loadedPremium);
+		};
+
+		return (double) Math.round(result);
 	}
 
-	/**
-	 * Convenience overload with no PED loading (factor = 1.0).
-	 * Used in mapToResponse and for LIFE / MOTOR / TRAVEL policies.
-	 */
-	private double calculateInstallment(Double totalAnnualPremium, PolicyPlan plan, PremiumType type) {
-		return calculateInstallment(totalAnnualPremium, plan, type, 1.0);
-	}
+
 
 //	---------------------------------------------CALCULATE PED LOADING FACTOR -------------------------------------------
 
@@ -525,25 +451,7 @@ public class PolicyServiceImpl implements PolicyService {
 	}
 	
 	
-//-------------------------------------------------	CHECK METHOD FOR LAPSED POLICY----------------------------------------
 
-	/**
-	 * If an ACTIVE policy's next payment is overdue beyond the Grace Period
-	 * (15 days for MONTHLY, 30 days for others), automatically flips status to LAPSED.
-	 * 
-	 * 
-	 */
-	private void checkAndSetLapsed(Policy p) {
-		if (p.getStatus() == PolicyStatus.ACTIVE && p.getNextPaymentDueDate() != null) {
-			int graceDays = (p.getSelectedPremiumType() == com.insurance.demo.enums.PremiumType.MONTHLY) ? 15 : 30;
-			if (LocalDate.now().isAfter(p.getNextPaymentDueDate().plusDays(graceDays))) {
-				p.setStatus(PolicyStatus.LAPSED);
-				policyRepository.save(p);
-				log.info("Policy ID {} status updated to LAPSED due to overdue payment exceeding {} days grace period", p.getPolicyId(), graceDays);
-			}
-		}
-	}
-	
 //	-----------------------------------------------CALCULATE IDV FOR MOTOR TYPE----------------------------------------------
 
 	private double calculateIDV(double baseCoverage, int vehicleAge) {
@@ -575,7 +483,7 @@ public class PolicyServiceImpl implements PolicyService {
 				? null
 				: ((p.getInstallmentAmount() != null)
 						? p.getInstallmentAmount()
-						: calculateInstallment(p.getPlan().getPremiumAmount(), p.getPlan(), p.getSelectedPremiumType() != null ? p.getSelectedPremiumType() : p.getPlan().getPremiumType()));
+						: calculateInstallment(p.getPlan().getPremiumAmount(), p.getPlan(), p.getSelectedPremiumType() != null ? p.getSelectedPremiumType() : p.getPlan().getPremiumType(), 1.0));
 
 		String productName = (p.getPlan() != null && p.getPlan().getProduct() != null)
 				? p.getPlan().getProduct().getProductName()
@@ -645,8 +553,8 @@ public class PolicyServiceImpl implements PolicyService {
 		}
 
 		boolean duplicateVehicle = policyRepository.existsByVehicleRegistrationNoAndStatusIn(
-				cleanedRegNo,
-				List.of(PolicyStatus.ACTIVE, PolicyStatus.PENDING_PAYMENT, PolicyStatus.LAPSED)
+		        cleanedRegNo,
+		        UNFINISHED_STATUSES
 		);
 		if (duplicateVehicle) {
 			throw new BadRequestException("A policy already exists for vehicle registration number: " + cleanedRegNo);

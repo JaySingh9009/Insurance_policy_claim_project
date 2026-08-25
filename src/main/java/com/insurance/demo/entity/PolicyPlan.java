@@ -9,7 +9,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "policy_plans")
+@Table(name = "policy_plans", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_product_plan_name", columnNames = {"product_id", "plan_name"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
