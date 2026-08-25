@@ -151,7 +151,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .orderId(orderId)
                 .amount(payableAmount)
                 .currency("INR")
-                .keyId("rzp_test_THPAh3J7KnVXXJ")
+                .keyId("rzp_test_THk62Ckvp2oI7R")
                 .policyId(policy.getPolicyId())
                 .policyNumber(policy.getPolicyNumber())
                 .customerName(customerName)
