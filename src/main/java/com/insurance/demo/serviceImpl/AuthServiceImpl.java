@@ -115,6 +115,12 @@ public class AuthServiceImpl implements AuthService {
         return new LoginResponse(token, user.getEmail(), user.getRole().name());
     }
 
+    @Override
+    public String logout() {
+        log.info("User logged out successfully");
+        return "Logged out successfully";
+    }
+
     private UserResponse mapToUserResponse(User user) {
         return new UserResponse(
                 user.getId(),

@@ -120,27 +120,6 @@ public class ClaimServiceImpl implements ClaimService {
             throw new BadRequestException("At least one claim document must be submitted");
         }
 
-        // Compute Fraud Risk Score
-        int riskScore = 0;
-        if (request.getClaimAmount() > (policy.getPlan().getCoverageAmount() * 0.8)) {
-            riskScore += 30;
-            log.info("Fraud Risk Score: +30 points because claim amount {} exceeds 80% of coverage {}", 
-                    request.getClaimAmount(), policy.getPlan().getCoverageAmount());
-        }
-        List<Claim> customerClaims = claimRepository.findByPolicyCustomerCustomerId(customer.getCustomerId());
-        boolean hasPriorRejected = customerClaims.stream().anyMatch(c -> c.getStatus() == ClaimStatus.REJECTED);
-        if (hasPriorRejected) {
-            riskScore += 30;
-            log.info("Fraud Risk Score: +30 points because customer has prior rejected claims");
-        }
-
-        String riskLevel = "LOW";
-        if (riskScore >= 70) {
-            riskLevel = "HIGH";
-        } else if (riskScore >= 40) {
-            riskLevel = "MEDIUM";
-        }
-
         Claim claim = Claim.builder()
                 .claimNumber(NumberGenerator.generateClaimNumber())
                 .policy(policy)
@@ -148,8 +127,6 @@ public class ClaimServiceImpl implements ClaimService {
                 .claimReason(request.getClaimReason())
                 .incidentDate(request.getIncidentDate())
                 .status(ClaimStatus.SUBMITTED)
-                .fraudRiskScore(riskScore)
-                .fraudRiskLevel(riskLevel)
                 .build();
 
         claim = claimRepository.save(claim);
@@ -400,8 +377,6 @@ public class ClaimServiceImpl implements ClaimService {
                 .customerName(c.getPolicy().getCustomer().getUser().getFullName())
                 .assignedAgentId(c.getAssignedAgent() != null ? c.getAssignedAgent().getId() : null)
                 .assignedAgentName(c.getAssignedAgent() != null ? c.getAssignedAgent().getFullName() : null)
-                .fraudRiskScore(c.getFraudRiskScore())
-                .fraudRiskLevel(c.getFraudRiskLevel())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();

@@ -66,6 +66,16 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
+    @PostMapping("/logout")
+    @Operation(
+        summary = "Logout user",
+        description = "Logs out the user session by returning a logout confirmation."
+    )
+    public ResponseEntity<Map<String, String>> logout() {
+        String message = authService.logout();
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
 
     @PostMapping("/forgot-password")
     @Operation(
@@ -79,7 +89,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", message));
     }
 
-    @PostMapping("/verify-forgot-password-otp")
+    @PostMapping({"/verify-reset-otp"})
     @Operation(
         summary = "Step 2 – Verify password reset OTP",
         description = "OTP verify karo. Successful hone par Step 3 ke liye aage badho."
