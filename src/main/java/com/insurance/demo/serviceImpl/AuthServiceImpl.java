@@ -150,7 +150,7 @@ public class AuthServiceImpl implements AuthService {
                 log.warn("Token remaining expiration time is <= 0 ms, skipping Redis blacklisting.");
             }
         } else {
-            log.warn("Logout endpoint invoked without valid Bearer Authorization header! Received: {}", authHeader);
+            log.warn("Logout endpoint invoked without valid Bearer Authorization header Received: {}", authHeader);
         }
     }
 
