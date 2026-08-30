@@ -1,6 +1,7 @@
 package com.insurance.demo.controller;
 
 
+import com.insurance.demo.dto.OfficerWorkloadResponse;
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.UserResponse;
 import com.insurance.demo.security.CustomUserDetails;
@@ -14,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -32,6 +35,7 @@ public class UserController {
     }
 
     @GetMapping("/officers")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get active Insurance Officers list (Admin only)")
     public ResponseEntity<java.util.List<UserResponse>> getOfficers() {
         PagedResponse<UserResponse> page = userService.getAllUsers(0, 100, "fullName", "asc", com.insurance.demo.enums.Role.OFFICER);
@@ -39,6 +43,13 @@ public class UserController {
                 .filter(UserResponse::isActive)
                 .collect(java.util.stream.Collectors.toList());
         return ResponseEntity.ok(activeOfficers);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/officers-workload")
+    @Operation(summary = "Get active officers with live active task count — for claim assignment dropdown (Admin only)")
+    public ResponseEntity<List<OfficerWorkloadResponse>> getOfficersWithWorkload() {
+        return ResponseEntity.ok(userService.getOfficersWithWorkload());
     }
 
     @PreAuthorize("hasRole('ADMIN')")

@@ -5,5 +5,5 @@ import com.insurance.demo.dto.ClaimHistoryResponse;
 import java.util.List;
 
 public interface ClaimHistoryService {
-    List<ClaimHistoryResponse> getClaimHistory(Long claimId);
+    List<ClaimHistoryResponse> getClaimHistory(Long claimId, Long currentUserId, String userRole);
 }

@@ -34,6 +34,7 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping("/create-order")
+    @PreAuthorize("hasAnyRole('CUSTOMER')")
     @Operation(summary = "Create Razorpay Order for Policy Payment")
     public ResponseEntity<RazorpayOrderResponse> createRazorpayOrder(
             @Valid @RequestBody CreateRazorpayOrderRequest request,
@@ -45,6 +46,7 @@ public class PaymentController {
     
     
     @PostMapping("/verify")
+    @PreAuthorize("hasAnyRole('CUSTOMER')")
     @Operation(summary = "Verify Razorpay Payment Signature and activate policy")
     public ResponseEntity<PaymentResponse> verifyRazorpayPayment(
             @Valid @RequestBody VerifyRazorpayPaymentRequest request,

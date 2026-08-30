@@ -147,36 +147,9 @@ public class CustomerServiceImpl implements CustomerService {
             String sortBy,
             String sortDir) {
 
-        PaginationValidator.validate(
-                page,
-                size,
-                sortBy,
-                ALLOWED_SORT_FIELDS);
-
-        Sort sort = "desc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).descending()
-                : Sort.by(sortBy).ascending();
-
-        Pageable pageable =
-                PageRequest.of(page, size, sort);
-
-        Page<Customer> customerPage =
-                customerRepository.findAll(pageable);
-
-        List<CustomerResponse> records =
-                customerPage.getContent()
-                        .stream()
-                        .map(this::mapToResponse)
-                        .toList();
-
-        return PagedResponse.<CustomerResponse>builder()
-                .records(records)
-                .currentPage(customerPage.getNumber())
-                .pageSize(customerPage.getSize())
-                .totalRecords(customerPage.getTotalElements())
-                .totalPages(customerPage.getTotalPages())
-                .isLastPage(customerPage.isLast())
-                .build();
+        Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
+        Page<Customer> customerPage = customerRepository.findAll(pageable);
+        return PagedResponse.from(customerPage, this::mapToResponse);
     }
 
 

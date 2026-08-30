@@ -321,14 +321,9 @@ public class PolicyServiceImpl implements PolicyService {
 
 	@Override
 	public PagedResponse<PolicyResponse> getAllPolicies(int page, int size, String sortBy, String sortDir) {
-
-		PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-
-		Pageable pageable = buildPageable(page, size, sortBy, sortDir);
-
+		Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
 		Page<Policy> policyPage = policyRepository.findAll(pageable);
-
-		return toPagedResponse(policyPage);
+		return PagedResponse.from(policyPage, this::mapToResponse);
 	}
 	
 	
@@ -336,17 +331,12 @@ public class PolicyServiceImpl implements PolicyService {
 
 	@Override
 	public PagedResponse<PolicyResponse> getMyPolicies(Long userId, int page, int size, String sortBy, String sortDir) {
-
-		PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-
 		Customer customer = customerRepository.findByUser_Id(userId)
 				.orElseThrow(() -> new ResourceNotFoundException("Customer profile not found"));
 
-		Pageable pageable = buildPageable(page, size, sortBy, sortDir);
-
+		Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
 		Page<Policy> policyPage = policyRepository.findByCustomerCustomerId(customer.getCustomerId(), pageable);
-
-		return toPagedResponse(policyPage);
+		return PagedResponse.from(policyPage, this::mapToResponse);
 	}
 	
 	
@@ -371,23 +361,7 @@ public class PolicyServiceImpl implements PolicyService {
 				.orElseThrow(() -> new ResourceNotFoundException("Policy not found with ID: " + policyId));
 	}
 	
-//	--------------------------------------BUILD PAGABLE----------------------------------------------
 
-	private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
-
-		Sort sort = "desc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-
-		return PageRequest.of(page, size, sort);
-	}
-
-	private PagedResponse<PolicyResponse> toPagedResponse(Page<Policy> policyPage) {
-
-		List<PolicyResponse> records = policyPage.getContent().stream().map(this::mapToResponse).toList();
-
-		return PagedResponse.<PolicyResponse>builder().records(records).currentPage(policyPage.getNumber())
-				.pageSize(policyPage.getSize()).totalRecords(policyPage.getTotalElements())
-				.totalPages(policyPage.getTotalPages()).isLastPage(policyPage.isLast()).build();
-	}
 	
 	
 	

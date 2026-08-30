@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import org.json.JSONObject;
 import org.springframework.beans.factory.ObjectProvider;
@@ -32,6 +31,7 @@ import com.insurance.demo.enums.PremiumType;
 import com.insurance.demo.enums.ProductType;
 import com.insurance.demo.exception.BadRequestException;
 import com.insurance.demo.exception.DuplicateResourceException;
+import com.insurance.demo.exception.PaymentGatewayException;
 import com.insurance.demo.exception.ResourceNotFoundException;
 import com.insurance.demo.exception.UnauthorizedAccessException;
 import com.insurance.demo.repository.CustomerRepository;
@@ -41,6 +41,8 @@ import com.insurance.demo.service.PaymentService;
 import com.insurance.demo.util.PaginationValidator;
 import com.razorpay.Order;
 import com.razorpay.RazorpayClient;
+import com.razorpay.RazorpayException;
+import com.razorpay.Utils;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,24 +62,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PagedResponse<PaymentResponse> getAllPayments(int page, int size, String sortBy, String sortDir) {
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-        Sort sort = "desc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
         Page<PremiumPayment> paymentPage = paymentRepository.findAll(pageable);
-        return toPagedResponse(paymentPage);
-    }
-
-    private PagedResponse<PaymentResponse> toPagedResponse(Page<PremiumPayment> page) {
-        List<PaymentResponse> records = page.getContent().stream().map(this::mapToResponse).toList();
-        return PagedResponse.<PaymentResponse>builder()
-                .records(records)
-                .currentPage(page.getNumber())
-                .pageSize(page.getSize())
-                .totalRecords(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .isLastPage(page.isLast())
-                .build();
+        return PagedResponse.from(paymentPage, this::mapToResponse);
     }
 
     private PaymentResponse mapToResponse(PremiumPayment p) {
@@ -103,21 +90,9 @@ public class PaymentServiceImpl implements PaymentService {
             String sortBy,
             String sortDir) {
 
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(sortDir.equalsIgnoreCase("desc")
-                        ? Sort.Direction.DESC
-                        : Sort.Direction.ASC,
-                        sortBy)
-        );
-
-        Page<PremiumPayment> paymentPage =
-                paymentRepository.findByPolicyCustomerUserId(userId, pageable);
-
-        return toPagedResponse(paymentPage);
+        Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
+        Page<PremiumPayment> paymentPage = paymentRepository.findByPolicyCustomerUserId(userId, pageable);
+        return PagedResponse.from(paymentPage, this::mapToResponse);
     }
 
     @Override
@@ -129,23 +104,22 @@ public class PaymentServiceImpl implements PaymentService {
 
         String orderId = null;
         RazorpayClient razorpayClient = razorpayClientProvider.getIfAvailable();
-        if (razorpayClient != null) {
-            try {
-                JSONObject orderRequest = new JSONObject();
-                orderRequest.put("amount", Math.round(payableAmount * 100)); // amount in paise
-                orderRequest.put("currency", "INR");
-                orderRequest.put("receipt", "txn_" + System.currentTimeMillis());
-
-                Order order = razorpayClient.orders.create(orderRequest);
-                orderId = order.get("id");
-                log.info("Successfully generated real Razorpay order ID via SDK: {}", orderId);
-            } catch (Exception e) {
-                log.warn("Razorpay API order creation failed ({}), using fallback order ID generator.", e.getMessage());
-            }
+        if (razorpayClient == null) {
+            throw new PaymentGatewayException("Payment gateway is currently unavailable. Please try again later.");
         }
 
-        if (orderId == null) {
-            orderId = "order_RZP_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 6);
+        try {
+            JSONObject orderRequest = new JSONObject();
+            orderRequest.put("amount", Math.round(payableAmount * 100)); // amount in paise
+            orderRequest.put("currency", "INR");
+            orderRequest.put("receipt", "txn_" + System.currentTimeMillis());
+
+            Order order = razorpayClient.orders.create(orderRequest);
+            orderId = order.get("id");
+            log.info("Razorpay order created: {}", orderId);
+        } catch (Exception e) {
+            log.error("Razorpay order creation failed: {}", e.getMessage());
+            throw new PaymentGatewayException("Payment gateway is currently unavailable. Please try again later.");
         }
 
         return RazorpayOrderResponse.builder()
@@ -169,6 +143,36 @@ public class PaymentServiceImpl implements PaymentService {
         if (paymentRepository.findByTransactionReference(request.getRazorpayPaymentId()).isPresent()) {
             throw new DuplicateResourceException("Payment with reference '" + request.getRazorpayPaymentId() + "' already processed.");
         }
+
+        // ─── Razorpay Signature Verification ─────────────────────────────────────
+        // Razorpay sends: HMAC-SHA256(razorpay_order_id + "|" + razorpay_payment_id, key_secret)
+        // We must verify this signature to confirm the payment is genuine and not forged.
+        try {
+            JSONObject verificationAttributes = new JSONObject();
+            verificationAttributes.put("razorpay_order_id", request.getRazorpayOrderId());
+            verificationAttributes.put("razorpay_payment_id", request.getRazorpayPaymentId());
+            verificationAttributes.put("razorpay_signature", request.getRazorpaySignature());
+
+            boolean isValidSignature = Utils.verifyPaymentSignature(
+                    verificationAttributes,
+                    razorpayConfig.getKeySecret()
+            );
+
+            if (!isValidSignature) {
+                log.warn("Razorpay signature verification FAILED for paymentId={}, orderId={}",
+                        request.getRazorpayPaymentId(), request.getRazorpayOrderId());
+                throw new BadRequestException(
+                        "Payment verification failed: Invalid Razorpay signature. Payment may be forged.");
+            }
+
+            log.info("Razorpay signature verified successfully for paymentId={}", request.getRazorpayPaymentId());
+
+        } catch (RazorpayException e) {
+            log.error("Razorpay signature verification error: {}", e.getMessage());
+            throw new BadRequestException(
+                    "Payment verification failed due to a gateway error. Please contact support.");
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         Double paidAmount = calculatePayableAmount(policy, request.getAmount());
         

@@ -92,6 +92,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request);
     }
 
+    @ExceptionHandler(PaymentGatewayException.class)
+    public ResponseEntity<ApiErrorResponse> handlePaymentGateway(
+            PaymentGatewayException ex, HttpServletRequest request) {
+        log.error("Payment gateway error: {}", ex.getMessage());
+        return build(HttpStatus.BAD_GATEWAY, "PAYMENT_GATEWAY_ERROR", ex.getMessage(), request);
+    }
+
     @ExceptionHandler(InvalidPolicyStatusException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidPolicyStatus(
             InvalidPolicyStatusException ex, HttpServletRequest request) {

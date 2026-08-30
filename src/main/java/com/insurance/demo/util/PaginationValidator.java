@@ -2,6 +2,9 @@ package com.insurance.demo.util;
 
 import com.insurance.demo.exception.InvalidPaginationException;
 import com.insurance.demo.exception.InvalidSortFieldException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.Set;
 
@@ -28,4 +31,11 @@ public class PaginationValidator {
             }
         }
     }
+
+    public static Pageable buildPageable(int page, int size, String sortBy, String sortDir, Set<String> allowedSortFields) {
+        validate(page, size, sortBy, allowedSortFields);
+        Sort sort = "desc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        return PageRequest.of(page, size, sort);
+    }
 }
+

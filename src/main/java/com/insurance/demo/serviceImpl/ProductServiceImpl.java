@@ -88,10 +88,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public PagedResponse<ProductResponse> getAllProducts(int page, int size, String sortBy, String sortDir) {
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
         Page<InsuranceProduct> productPage = productRepository.findAll(pageable);
-        return toPagedResponse(productPage);
+        return PagedResponse.from(productPage, this::mapToResponse);
     }
 
 
@@ -125,23 +124,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
-        Sort sort = "desc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-        return PageRequest.of(page, size, sort);
-    }
 
-    private PagedResponse<ProductResponse> toPagedResponse(Page<InsuranceProduct> productPage) {
-        List<ProductResponse> records = productPage.getContent().stream().map(this::mapToResponse).toList();
-        return PagedResponse.<ProductResponse>builder()
-                .records(records)
-                .currentPage(productPage.getNumber())
-                .pageSize(productPage.getSize())
-                .totalRecords(productPage.getTotalElements())
-                .totalPages(productPage.getTotalPages())
-                .isLastPage(productPage.isLast())
-                .build();
-    }
 
     private ProductResponse mapToResponse(InsuranceProduct p) {
         return new ProductResponse(p.getProductId(), p.getProductName(),

@@ -217,22 +217,19 @@ public class ClaimServiceImpl implements ClaimService {
 
 	@Override
 	public PagedResponse<ClaimResponse> getAllClaims(int page, int size, String sortBy, String sortDir) {
-		PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-		Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+		Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
 		Page<Claim> claimPage = claimRepository.findAll(pageable);
-		return toPagedResponse(claimPage);
+		return PagedResponse.from(claimPage, this::mapToResponse);
 	}
 
 	@Override
 	public PagedResponse<ClaimResponse> getMyClaims(Long userId, int page, int size, String sortBy, String sortDir) {
-		PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-
 		Customer customer = customerRepository.findByUser_Id(userId)
 				.orElseThrow(() -> new ResourceNotFoundException("Customer profile not found"));
 
-		Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+		Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
 		Page<Claim> claimPage = claimRepository.findByPolicyCustomerCustomerId(customer.getCustomerId(), pageable);
-		return toPagedResponse(claimPage);
+		return PagedResponse.from(claimPage, this::mapToResponse);
 	}
 
 	private void validateOfficerTransition(ClaimStatus current, ClaimStatus target) {
@@ -287,17 +284,6 @@ public class ClaimServiceImpl implements ClaimService {
 		}
 	}
 
-	private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
-		Sort sort = "desc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-		return PageRequest.of(page, size, sort);
-	}
-
-	private PagedResponse<ClaimResponse> toPagedResponse(Page<Claim> page) {
-		List<ClaimResponse> records = page.getContent().stream().map(this::mapToResponse).toList();
-		return PagedResponse.<ClaimResponse>builder().records(records).currentPage(page.getNumber())
-				.pageSize(page.getSize()).totalRecords(page.getTotalElements()).totalPages(page.getTotalPages())
-				.isLastPage(page.isLast()).build();
-	}
 
 	@Override
 	@Transactional
@@ -326,9 +312,8 @@ public class ClaimServiceImpl implements ClaimService {
 
 	private ClaimResponse mapToResponse(Claim c) {
 		Long officerId = c.getAssignedOfficer() != null ? c.getAssignedOfficer().getId() : null;
-		Long activeTaskCount = officerId != null
-				? claimRepository.countByAssignedOfficerIdAndStatusIn(officerId, OFFICER_ACTIVE_STATUSES)
-				: null;
+		// activeTaskCount is no longer fetched here — use GET /api/admin/users/officers-workload
+		// for officer workload data (used in Assign Officer dropdown)
 
 		String remarks = c.getOfficerRemarks();
 		String officerName = c.getAssignedOfficer() != null ? c.getAssignedOfficer().getFullName() : null;
@@ -338,7 +323,7 @@ public class ClaimServiceImpl implements ClaimService {
 				.claimAmount(c.getClaimAmount()).claimReason(c.getClaimReason()).incidentDate(c.getIncidentDate())
 				.status(c.getStatus().name()).officerRemarks(remarks).adminRemarks(c.getAdminRemarks())
 				.customerName(c.getPolicy().getCustomer().getUser().getFullName()).assignedOfficerId(officerId)
-				.assignedOfficerName(officerName).assignedOfficerActiveTaskCount(activeTaskCount)
+				.assignedOfficerName(officerName).assignedOfficerActiveTaskCount(null)
 				.claimCategory(c.getClaimCategory()).createdAt(c.getCreatedAt()).updatedAt(c.getUpdatedAt()).build();
 	}
 }

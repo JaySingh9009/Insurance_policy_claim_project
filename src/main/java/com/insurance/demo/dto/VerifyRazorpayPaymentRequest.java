@@ -1,5 +1,6 @@
 package com.insurance.demo.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,12 +16,13 @@ public class VerifyRazorpayPaymentRequest {
     @NotNull(message = "Policy ID is required")
     private Long policyId;
 
-    @NotNull(message = "Razorpay payment ID is required")
+    @NotBlank(message = "Razorpay payment ID is required")
     private String razorpayPaymentId;
 
-    @NotNull(message = "Razorpay order ID is required")
+    @NotBlank(message = "Razorpay order ID is required")
     private String razorpayOrderId;
 
+    @NotBlank(message = "Razorpay signature is required for payment verification")
     private String razorpaySignature;
 
     private Double amount;

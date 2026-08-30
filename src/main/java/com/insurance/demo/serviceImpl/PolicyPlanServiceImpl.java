@@ -93,18 +93,16 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
 
     @Override
     public PagedResponse<PolicyPlanResponse> getAllPlans(int page, int size, String sortBy, String sortDir) {
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
         Page<PolicyPlan> planPage = planRepository.findAll(pageable);
-        return toPagedResponse(planPage);
+        return PagedResponse.from(planPage, this::mapToResponse);
     }
 
     @Override
     public PagedResponse<PolicyPlanResponse> getActivePlans(int page, int size, String sortBy, String sortDir) {
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
         Page<PolicyPlan> planPage = planRepository.findByActiveTrue(pageable);
-        return toPagedResponse(planPage);
+        return PagedResponse.from(planPage, this::mapToResponse);
     }
 
 
@@ -138,23 +136,7 @@ public class PolicyPlanServiceImpl implements PolicyPlanService {
         }
     }
 
-    private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
-        Sort sort = "desc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-        return PageRequest.of(page, size, sort);
-    }
 
-    private PagedResponse<PolicyPlanResponse> toPagedResponse(Page<PolicyPlan> planPage) {
-        List<PolicyPlanResponse> records = planPage.getContent().stream().map(this::mapToResponse).toList();
-        return PagedResponse.<PolicyPlanResponse>builder()
-                .records(records)
-                .currentPage(planPage.getNumber())
-                .pageSize(planPage.getSize())
-                .totalRecords(planPage.getTotalElements())
-                .totalPages(planPage.getTotalPages())
-                .isLastPage(planPage.isLast())
-                .build();
-    }
 
     private PolicyPlanResponse mapToResponse(PolicyPlan p) {
         return PolicyPlanResponse.builder()

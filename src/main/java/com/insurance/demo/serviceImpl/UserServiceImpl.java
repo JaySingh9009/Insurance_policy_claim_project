@@ -11,6 +11,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.insurance.demo.dto.OfficerWorkloadResponse;
 import com.insurance.demo.dto.PagedResponse;
 import com.insurance.demo.dto.UserResponse;
 import com.insurance.demo.entity.User;
@@ -65,24 +66,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PagedResponse<UserResponse> getAllUsers(int page, int size, String sortBy, String sortDir, Role role) {
-        PaginationValidator.validate(page, size, sortBy, ALLOWED_SORT_FIELDS);
-        Sort sort = "desc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-        Pageable pageable = PageRequest.of(page, size, sort);
-
+        Pageable pageable = PaginationValidator.buildPageable(page, size, sortBy, sortDir, ALLOWED_SORT_FIELDS);
         Page<User> userPage = (role != null)
                 ? userRepository.findByRole(role, pageable)
                 : userRepository.findAll(pageable);
-        List<UserResponse> records = userPage.getContent().stream().map(this::mapToResponse).toList();
-
-        return PagedResponse.<UserResponse>builder()
-                .records(records)
-                .currentPage(userPage.getNumber())
-                .pageSize(userPage.getSize())
-                .totalRecords(userPage.getTotalElements())
-                .totalPages(userPage.getTotalPages())
-                .isLastPage(userPage.isLast())
-                .build();
+        return PagedResponse.from(userPage, this::mapToResponse);
     }
 
     @Override
@@ -127,10 +115,7 @@ public class UserServiceImpl implements UserService {
     );
 
     private UserResponse mapToResponse(User u) {
-        long activeTaskCount = 0;
-        if (u.getRole() == Role.OFFICER) {
-            activeTaskCount = claimRepository.countByAssignedOfficerIdAndStatusIn(u.getId(), OFFICER_ACTIVE_STATUSES);
-        }
+        // activeTaskCount is no longer fetched here — use /officers-workload endpoint instead
         return UserResponse.builder()
                 .id(u.getId())
                 .fullName(u.getFullName())
@@ -138,7 +123,25 @@ public class UserServiceImpl implements UserService {
                 .mobileNumber(u.getMobileNumber())
                 .role(u.getRole())
                 .active(u.isActive())
-                .activeTaskCount(activeTaskCount)
+                .activeTaskCount(0)
                 .build();
+    }
+
+    @Override
+    public List<OfficerWorkloadResponse> getOfficersWithWorkload() {
+        List<User> officers = userRepository.findByRoleAndActiveTrue(Role.OFFICER);
+        log.info("Fetching workload for {} active officers", officers.size());
+        return officers.stream()
+                .map(o -> OfficerWorkloadResponse.builder()
+                        .id(o.getId())
+                        .fullName(o.getFullName())
+                        .email(o.getEmail())
+                        .mobileNumber(o.getMobileNumber())
+                        .active(o.isActive())
+                        .activeTaskCount(
+                                claimRepository.countByAssignedOfficerIdAndStatusIn(o.getId(), OFFICER_ACTIVE_STATUSES)
+                        )
+                        .build())
+                .toList();
     }
 }
